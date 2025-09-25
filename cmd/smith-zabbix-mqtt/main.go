@@ -102,7 +102,11 @@ func main() {
 	trigParam := makeTriggerParam()
 
 	// Создаем мапу для хранения хостов и приоритета
+	// Сразу заполняем хостами из конфиг файла с приоритетом -1
 	trig := make(map[string]int)
+	for zabbixHost := range cfg.Topics.Servers {
+		trig[zabbixHost] = -1
+	}
 
 	go func() {
 		for range ticker.C {
@@ -169,11 +173,8 @@ func main() {
 				continue
 			}
 
-			// Перебираем мапу
+			// Перебираем мапу и публикуем статусы
 			for host, priority := range trig {
-				if priority == -1 {
-					continue
-				}
 				if topic, ok := cfg.Topics.Servers[host]; ok {
 					// Нашли нужный сервер в конфиг файле и публикуем в топик приоритет
 					pub(client, topic, convertPriority(priority))
