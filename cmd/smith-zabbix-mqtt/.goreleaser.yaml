@@ -22,6 +22,8 @@ builds:
       - linux
     goarch:
       - arm
+      - arm64
+      - amd64
     goarm:
       - 7
 
