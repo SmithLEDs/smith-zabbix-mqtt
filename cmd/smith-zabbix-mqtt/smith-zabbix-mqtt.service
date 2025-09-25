@@ -1,0 +1,14 @@
+[Unit]
+Description=Zabbix triggers to MQTT
+Documentation=https://github.com/SmithLEDs/smith-zabbix-mqtt/
+After=network.target
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=10
+User=root
+ExecStart=/usr/bin/smith-zabbix-mqtt
+
+[Install]
+WantedBy=multi-user.target
