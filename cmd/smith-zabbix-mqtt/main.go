@@ -19,7 +19,7 @@ import (
 const (
 	envLocal = "local"
 	envDev   = "dev"
-	version  = "0.0.1"
+	version  = "0.0.2"
 
 	DEFAULT_CONFIG_PATH = "/etc/smith-zabbix-mqtt/config.yaml"
 	MOSQUITTO_SOCK_FILE = "/var/run/mosquitto/mosquitto.sock"
@@ -30,7 +30,7 @@ var cfg *config.Config
 var log *slog.Logger
 var startTime time.Time
 
-var s *triggerStruct
+var s *triggers
 
 func init() {
 	startTime = time.Now()
@@ -48,7 +48,6 @@ func main() {
 	cfg = config.MustLoad(*configPath)
 
 	s.readConfig(cfg)
-	fmt.Printf("%+v", s.converSeverity)
 
 	log.Info(
 		"Starting smith-zabbix-mqtt",
