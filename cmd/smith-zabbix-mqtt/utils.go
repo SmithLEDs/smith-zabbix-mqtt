@@ -10,13 +10,6 @@ import (
 	"github.com/fabiang/go-zabbix"
 )
 
-func convertPriority(priority int) string {
-	if val, ok := severity[priority]; ok {
-		return val
-	}
-	return "2"
-}
-
 // Публикация в MQTT
 func pub(client mqtt.Client, topic, msg string) {
 

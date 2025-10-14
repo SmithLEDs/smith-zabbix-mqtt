@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
-	"maps"
 	"os"
 	"os/signal"
 	"syscall"
@@ -20,7 +19,7 @@ import (
 const (
 	envLocal = "local"
 	envDev   = "dev"
-	version  = "0.0.1"
+	version  = "0.0.2"
 
 	DEFAULT_CONFIG_PATH = "/etc/smith-zabbix-mqtt/config.yaml"
 	MOSQUITTO_SOCK_FILE = "/var/run/mosquitto/mosquitto.sock"
@@ -30,11 +29,13 @@ const (
 var cfg *config.Config
 var log *slog.Logger
 var startTime time.Time
-var severity = map[int]string{0: "2", 1: "2", 2: "3", 3: "3", 4: "4", 5: "4"}
+
+var s *triggers
 
 func init() {
 	startTime = time.Now()
 	log = setupLogger(envLocal)
+	s = makeTriggerStruct()
 }
 
 func main() {
@@ -46,10 +47,7 @@ func main() {
 
 	cfg = config.MustLoad(*configPath)
 
-	// Если в конфигурации есть переобределения приоритета
-	if len(cfg.Severity) > 0 {
-		maps.Copy(severity, cfg.Severity)
-	}
+	s.readConfig(cfg)
 
 	log.Info(
 		"Starting smith-zabbix-mqtt",
@@ -98,15 +96,21 @@ func main() {
 	ticker := time.NewTicker(cfg.UpdateInterval)
 	defer ticker.Stop()
 
+	// Тикер uptime если указали топик
+	if cfg.Topics.Uptime != "" {
+		tickerUptime := time.NewTicker(time.Second)
+		defer tickerUptime.Stop()
+		go func() {
+			for range tickerUptime.C {
+				if client.IsConnectionOpen() {
+					pub(client, cfg.Topics.Uptime, uptime(startTime))
+				}
+			}
+		}()
+	}
+
 	// Формируем запрос для триггеров
 	trigParam := makeTriggerParam()
-
-	// Создаем мапу для хранения хостов и приоритета
-	// Сразу заполняем хостами из конфиг файла с приоритетом -1
-	trig := make(map[string]int)
-	for zabbixHost := range cfg.Topics.Servers {
-		trig[zabbixHost] = -1
-	}
 
 	go func() {
 		for range ticker.C {
@@ -128,26 +132,14 @@ func main() {
 				if cfg.Topics.TotalTriggers != "" {
 					pub(client, cfg.Topics.TotalTriggers, fmt.Sprint(len(triggers)))
 				}
-				if cfg.Topics.Uptime != "" {
-					pub(client, cfg.Topics.Uptime, uptime(startTime))
-				}
-			}
-
-			// Пропуск, если нет активных триггеров
-			if len(triggers) == 0 {
-				continue
 			}
 
 			// Перебираем все активные триггеры
-			for _, vTrig := range triggers {
-				// Перебираем все хосты в триггере
-				for _, vHost := range vTrig.Hosts {
-					// Если текущего хоста нет в мапе, то добавляем
-					if val, ok := trig[vHost.Hostname]; !ok {
-						trig[vHost.Hostname] = vTrig.Severity
-					} else if vTrig.Severity > val {
-						// Если хост существует в мапе и его приоритет ниже текущего приоритета триггера
-						trig[vHost.Hostname] = vTrig.Severity
+			if len(triggers) != 0 {
+				for _, vTrig := range triggers {
+					// Перебираем все хосты в триггере
+					for _, vHost := range vTrig.Hosts {
+						s.writeSeverity(vHost.Hostname, vTrig.Severity)
 					}
 				}
 			}
@@ -173,14 +165,8 @@ func main() {
 				continue
 			}
 
-			// Перебираем мапу и публикуем статусы
-			for host, priority := range trig {
-				if topic, ok := cfg.Topics.Servers[host]; ok {
-					// Нашли нужный сервер в конфиг файле и публикуем в топик приоритет
-					pub(client, topic, convertPriority(priority))
-					trig[host] = -1
-				}
-			}
+			s.publicSeverity(client)
+			s.activeOFF()
 		}
 	}()
 
