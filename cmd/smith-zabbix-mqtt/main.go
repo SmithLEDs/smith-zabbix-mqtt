@@ -134,6 +134,8 @@ func main() {
 				}
 			}
 
+			s.activeOFF()
+
 			// Перебираем все активные триггеры
 			if len(triggers) != 0 {
 				for _, vTrig := range triggers {
@@ -166,7 +168,7 @@ func main() {
 			}
 
 			s.publicSeverity(client)
-			s.activeOFF()
+
 		}
 	}()
 
