@@ -34,7 +34,7 @@ func (t *triggers) readConfig(conf *config.Config) {
 	for host, topic := range conf.Topics.Servers {
 		val := trigger{
 			topic:        topic,
-			severity:     0,
+			severity:     9,
 			lastSeverity: 0,
 			active:       true,
 		}
