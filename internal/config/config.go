@@ -13,8 +13,9 @@ type Config struct {
 	UpdateInterval time.Duration  `yaml:"update_interval" env-default:"1s"`
 	Mqtt           MQTT           `yaml:"mqtt"`
 	Zabbix         Zabbix         `yaml:"zabbix"`
-	Topics         TopicsPublic   `yaml:"topics"`
+	VirtualDevice  VirtualDevice  `yaml:"mqtt_virtual_device"`
 	Severity       map[int]string `yaml:"severity,omitempty"`
+	Hosts          []string       `yaml:"hosts,omitempty"`
 }
 
 type Zabbix struct {
@@ -26,9 +27,7 @@ type Zabbix struct {
 }
 
 type TopicsPublic struct {
-	TotalTriggers string            `yaml:"total_triggers,omitempty"`
-	Uptime        string            `yaml:"uptime,omitempty"`
-	Servers       map[string]string `yaml:"servers" env-default:""`
+	Servers map[string]string `yaml:"servers" env-default:""`
 }
 
 type MQTT struct {
@@ -37,6 +36,12 @@ type MQTT struct {
 	Auth     bool   `yaml:"authorization" env-default:"false"`
 	Login    string `yaml:"login" env-default:""`
 	Password string `yaml:"password" env-default:""`
+}
+
+type VirtualDevice struct {
+	Name          string `yaml:"name" env-default:"statusServers"`
+	TotalTriggers bool   `yaml:"total_triggers" env-default:"true"`
+	Uptime        bool   `yaml:"uptime" env-default:"true"`
 }
 
 // Загружаем конфигурацию из файла

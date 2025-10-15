@@ -20,6 +20,9 @@ const (
 	envLocal = "local"
 	envDev   = "dev"
 	version  = "0.0.3"
+	driver   = "smith-zabbix-mqtt"
+	rus      = "Zabbix2MQTT"
+	eng      = "Zabbix2MQTT"
 
 	DEFAULT_CONFIG_PATH = "/etc/smith-zabbix-mqtt/config.yaml"
 	MOSQUITTO_SOCK_FILE = "/var/run/mosquitto/mosquitto.sock"
@@ -92,18 +95,22 @@ func main() {
 	}
 	defer client.Disconnect(250)
 
-	// Создаем тикер
+	// Публикация для виртуального устройства в WirenBoard
+	order := publicMainDevice(client, cfg.VirtualDevice)
+	publicControlsDevice(client, cfg, order)
+
+	// Создаем основной тикер для чтения триггеров
 	ticker := time.NewTicker(cfg.UpdateInterval)
 	defer ticker.Stop()
 
-	// Тикер uptime если указали топик
-	if cfg.Topics.Uptime != "" {
+	// Тикер uptime, если указали true для публикации
+	if cfg.VirtualDevice.Uptime {
 		tickerUptime := time.NewTicker(time.Second)
 		defer tickerUptime.Stop()
 		go func() {
 			for range tickerUptime.C {
 				if client.IsConnectionOpen() {
-					pub(client, cfg.Topics.Uptime, uptime(startTime))
+					pub(client, topicUptime, uptime(startTime))
 				}
 			}
 		}()
@@ -134,8 +141,8 @@ func main() {
 			}
 
 			if client.IsConnectionOpen() {
-				if cfg.Topics.TotalTriggers != "" {
-					pub(client, cfg.Topics.TotalTriggers, fmt.Sprint(len(triggers)))
+				if cfg.VirtualDevice.TotalTriggers {
+					pub(client, topicTotalTriggers, fmt.Sprint(len(triggers)))
 				}
 			}
 

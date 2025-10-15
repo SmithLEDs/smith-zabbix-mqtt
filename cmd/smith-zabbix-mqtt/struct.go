@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"maps"
+	"strings"
 
 	"github.com/SmithLEDs/smith-zabbix-mqtt/internal/config"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
@@ -32,7 +33,9 @@ func makeTriggerStruct() *triggers {
 
 // Читаем из конфигурации все хосты и топики для публикации
 func (t *triggers) readConfig(conf *config.Config) {
-	for host, topic := range conf.Topics.Servers {
+	for _, host := range conf.Hosts {
+		hostNoSpace := strings.ReplaceAll(host, " ", "_")
+		topic := fmt.Sprintf("/devices/%s/controls/%s", conf.VirtualDevice.Name, hostNoSpace)
 		val := trigger{
 			topic:        topic,
 			severity:     0,
@@ -80,7 +83,7 @@ func (t *triggers) publicSeverity(client mqtt.Client) {
 			continue
 		}
 
-		fmt.Printf("| %s \t(%d : %d)\n", trigger.topic, trigger.severity, trigger.lastSeverity)
+		//fmt.Printf("| %s \t(%d : %d)\n", trigger.topic, trigger.severity, trigger.lastSeverity)
 
 		if !trigger.active {
 			if trigger.severity != -1 {
@@ -88,18 +91,14 @@ func (t *triggers) publicSeverity(client mqtt.Client) {
 				trigger.lastSeverity = -1
 				t.m[host] = trigger
 				pub(client, trigger.topic, t.convertPriority(trigger.severity))
-				fmt.Printf("\t- Переход в неактивное состояние, публикация: %s\n", t.convertPriority(trigger.severity))
 			}
-			fmt.Printf("\t- Триггер не активен\n")
 			continue
 		}
 
-		fmt.Printf("\t- Триггер активен\n")
 		if trigger.severity == trigger.lastSeverity {
 			continue
 		}
 
-		fmt.Printf("\t- Смена приоритета, публикация: %s\n", t.convertPriority(trigger.severity))
 		pub(client, trigger.topic, t.convertPriority(trigger.severity))
 
 		trigger.lastSeverity = trigger.severity
