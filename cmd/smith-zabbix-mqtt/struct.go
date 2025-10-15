@@ -1,23 +1,25 @@
 package main
 
 import (
+	"fmt"
 	"maps"
+	"strings"
 
 	"github.com/SmithLEDs/smith-zabbix-mqtt/internal/config"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
 type trigger struct {
-	topic        string
-	severity     int
-	lastSeverity int
-	mSeverity    []int
-	active       bool
+	topic        string // Топик MQTT, куда публиковать приоритет
+	severity     int    // Самый максимальный текущий приоритет хоста
+	lastSeverity int    // Предедущий приоритет хоста
+	mSeverity    []int  // Массив приоритетов для хоста
+	active       bool   // Активность триггера (Активно, если API Zabbix выдал триггер на данный хост)
 }
 
 type triggers struct {
-	m               map[string]trigger
-	convertSeverity map[int]string
+	m               map[string]trigger // Мапа для хостов
+	convertSeverity map[int]string     // Мапа для конвертации приоритетов
 }
 
 // Создаем структуру для хранения триггеров
@@ -31,12 +33,14 @@ func makeTriggerStruct() *triggers {
 
 // Читаем из конфигурации все хосты и топики для публикации
 func (t *triggers) readConfig(conf *config.Config) {
-	for host, topic := range conf.Topics.Servers {
+	for _, host := range conf.Hosts {
+		hostNoSpace := strings.ReplaceAll(host, " ", "_")
+		topic := fmt.Sprintf("/devices/%s/controls/%s", conf.VirtualDevice.Name, hostNoSpace)
 		val := trigger{
 			topic:        topic,
-			severity:     -1,
+			severity:     0,
 			lastSeverity: 0,
-			active:       true,
+			active:       false,
 		}
 		t.m[host] = val
 	}
@@ -54,6 +58,7 @@ func (t *triggers) activeOFF() {
 	}
 }
 
+// Записываем приоритет в хост
 func (t *triggers) writeSeverity(host string, severity int) {
 	if val, ok := t.m[host]; ok {
 		val.mSeverity = append(val.mSeverity, severity)
@@ -78,7 +83,7 @@ func (t *triggers) publicSeverity(client mqtt.Client) {
 			continue
 		}
 
-		//fmt.Printf("\t%s \t(%d : %d)\t[%v]\n", trigger.topic, trigger.severity, trigger.lastSeverity, trigger.active)
+		//fmt.Printf("| %s \t(%d : %d)\n", trigger.topic, trigger.severity, trigger.lastSeverity)
 
 		if !trigger.active {
 			if trigger.severity != -1 {
