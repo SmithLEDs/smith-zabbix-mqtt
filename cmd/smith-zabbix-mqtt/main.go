@@ -114,6 +114,11 @@ func main() {
 
 	go func() {
 		for range ticker.C {
+			// Подключение MQTT не активно
+			if !client.IsConnectionOpen() {
+				continue
+			}
+
 			triggers, err := nSession.GetTriggers(trigParam)
 			if err != nil && !errors.Is(err, zabbix.ErrNotFound) {
 				log.Error(
@@ -160,11 +165,6 @@ func main() {
 					s += "\n"
 				}
 				log.Debug(s)
-			}
-
-			// Подключение MQTT не активно
-			if !client.IsConnectionOpen() {
-				continue
 			}
 
 			s.publicSeverity(client)

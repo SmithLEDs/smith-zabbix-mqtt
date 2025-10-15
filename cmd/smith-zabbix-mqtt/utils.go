@@ -11,7 +11,7 @@ import (
 )
 
 // Публикация в MQTT
-func pub(client mqtt.Client, topic, msg string) {
+func pub(client mqtt.Client, topic string, msg string) {
 
 	t := client.Publish(topic, QOS, true, msg)
 	go func() {
