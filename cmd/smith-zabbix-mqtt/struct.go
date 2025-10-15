@@ -8,16 +8,16 @@ import (
 )
 
 type trigger struct {
-	topic        string
-	severity     int
-	lastSeverity int
-	mSeverity    []int
-	active       bool
+	topic        string // Топик MQTT, куда публиковать приоритет
+	severity     int    // Самый максимальный текущий приоритет хоста
+	lastSeverity int    // Предедущий приоритет хоста
+	mSeverity    []int  // Массив приоритетов для хоста
+	active       bool   // Активность триггера (Активно, если API Zabbix выдал триггер на данный хост)
 }
 
 type triggers struct {
-	m               map[string]trigger
-	convertSeverity map[int]string
+	m               map[string]trigger // Мапа для хостов
+	convertSeverity map[int]string     // Мапа для конвертации приоритетов
 }
 
 // Создаем структуру для хранения триггеров
@@ -34,9 +34,9 @@ func (t *triggers) readConfig(conf *config.Config) {
 	for host, topic := range conf.Topics.Servers {
 		val := trigger{
 			topic:        topic,
-			severity:     9,
+			severity:     0,
 			lastSeverity: 0,
-			active:       true,
+			active:       false,
 		}
 		t.m[host] = val
 	}
@@ -54,6 +54,7 @@ func (t *triggers) activeOFF() {
 	}
 }
 
+// Записываем приоритет в хост
 func (t *triggers) writeSeverity(host string, severity int) {
 	if val, ok := t.m[host]; ok {
 		val.mSeverity = append(val.mSeverity, severity)
