@@ -19,7 +19,7 @@ import (
 const (
 	envLocal = "local"
 	envDev   = "dev"
-	version  = "0.0.2"
+	version  = "0.0.3"
 
 	DEFAULT_CONFIG_PATH = "/etc/smith-zabbix-mqtt/config.yaml"
 	MOSQUITTO_SOCK_FILE = "/var/run/mosquitto/mosquitto.sock"
