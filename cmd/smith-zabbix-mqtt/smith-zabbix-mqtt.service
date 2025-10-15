@@ -8,7 +8,7 @@ Type=simple
 Restart=always
 RestartSec=10
 User=root
-ExecStart=/usr/bin/smith-zabbix-mqtt --debug
+ExecStart=/usr/bin/smith-zabbix-mqtt
 
 [Install]
 WantedBy=multi-user.target

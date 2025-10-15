@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"maps"
 
 	"github.com/SmithLEDs/smith-zabbix-mqtt/internal/config"
@@ -79,7 +80,7 @@ func (t *triggers) publicSeverity(client mqtt.Client) {
 			continue
 		}
 
-		//fmt.Printf("\t%s \t(%d : %d)\t[%v]\n", trigger.topic, trigger.severity, trigger.lastSeverity, trigger.active)
+		fmt.Printf("| %s \t(%d : %d)\n", trigger.topic, trigger.severity, trigger.lastSeverity)
 
 		if !trigger.active {
 			if trigger.severity != -1 {
@@ -87,14 +88,18 @@ func (t *triggers) publicSeverity(client mqtt.Client) {
 				trigger.lastSeverity = -1
 				t.m[host] = trigger
 				pub(client, trigger.topic, t.convertPriority(trigger.severity))
+				fmt.Printf("\t- Переход в неактивное состояние, публикация: %s\n", t.convertPriority(trigger.severity))
 			}
+			fmt.Printf("\t- Триггер не активен\n")
 			continue
 		}
 
+		fmt.Printf("\t- Триггер активен\n")
 		if trigger.severity == trigger.lastSeverity {
 			continue
 		}
 
+		fmt.Printf("\t- Смена приоритета, публикация: %s\n", t.convertPriority(trigger.severity))
 		pub(client, trigger.topic, t.convertPriority(trigger.severity))
 
 		trigger.lastSeverity = trigger.severity
