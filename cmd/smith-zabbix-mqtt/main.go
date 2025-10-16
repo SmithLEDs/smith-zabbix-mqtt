@@ -19,7 +19,7 @@ import (
 const (
 	envLocal = "local"
 	envDev   = "dev"
-	version  = "0.0.3"
+	version  = "0.0.4"
 	driver   = "smith-zabbix-mqtt"
 	rus      = "Zabbix2MQTT"
 	eng      = "Zabbix2MQTT"
@@ -29,16 +29,10 @@ const (
 	DEFAULT_BROKER_URL  = "tcp://localhost:1883"
 )
 
-var cfg *config.Config
 var log *slog.Logger
-var startTime time.Time
-
-var s *triggers
 
 func init() {
-	startTime = time.Now()
 	log = setupLogger(envLocal)
-	s = makeTriggerStruct()
 }
 
 func main() {
@@ -48,9 +42,12 @@ func main() {
 
 	flag.Parse()
 
-	cfg = config.MustLoad(*configPath)
+	// Читаем конфигурацию
+	cfg := config.MustLoad(*configPath)
 
-	s.readConfig(cfg)
+	// Создаем и заполняем переменную для работы с триггерами
+	triggerStruct := makeTriggerStruct()
+	triggerStruct.readConfig(cfg)
 
 	log.Info(
 		"Starting smith-zabbix-mqtt",
@@ -84,7 +81,7 @@ func main() {
 		log.Info("broker URL is default and mosquitto socket detected, trying to connect via it")
 		cfg.Mqtt.Address = "unix://" + MOSQUITTO_SOCK_FILE
 	}
-	client := mqtt.NewClient(setupMQTT())
+	client := mqtt.NewClient(setupMQTT(cfg))
 
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
 		log.Error(
@@ -95,7 +92,7 @@ func main() {
 	}
 	defer client.Disconnect(250)
 
-	// Публикация для виртуального устройства в WirenBoard
+	// Создание виртуального устройства в WirenBoard
 	order := publicMainDevice(client, cfg.VirtualDevice)
 	publicControlsDevice(client, cfg, order)
 
@@ -107,6 +104,7 @@ func main() {
 	if cfg.VirtualDevice.Uptime {
 		tickerUptime := time.NewTicker(time.Second)
 		defer tickerUptime.Stop()
+		startTime := time.Now()
 		go func() {
 			for range tickerUptime.C {
 				if client.IsConnectionOpen() {
@@ -117,7 +115,7 @@ func main() {
 	}
 
 	// Формируем запрос для триггеров
-	trigParam := makeTriggerParam()
+	trigParam := makeTriggerParam(cfg)
 
 	go func() {
 		for range ticker.C {
@@ -146,14 +144,14 @@ func main() {
 				}
 			}
 
-			s.activeOFF()
+			triggerStruct.activeOFF()
 
 			// Перебираем все активные триггеры
 			if len(triggers) != 0 {
 				for _, vTrig := range triggers {
 					// Перебираем все хосты в триггере
 					for _, vHost := range vTrig.Hosts {
-						s.writeSeverity(vHost.Hostname, vTrig.Severity)
+						triggerStruct.writeSeverity(vHost.Hostname, vTrig.Severity)
 					}
 				}
 			}
@@ -174,7 +172,7 @@ func main() {
 				log.Debug(s)
 			}
 
-			s.publicSeverity(client)
+			triggerStruct.publicSeverity(client)
 
 		}
 	}()

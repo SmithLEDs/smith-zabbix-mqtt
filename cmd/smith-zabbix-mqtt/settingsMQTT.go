@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/SmithLEDs/smith-zabbix-mqtt/internal/config"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
@@ -12,7 +13,7 @@ const (
 	QOS = 1
 )
 
-func setupMQTT() *mqtt.ClientOptions {
+func setupMQTT(cfg *config.Config) *mqtt.ClientOptions {
 	opts := mqtt.NewClientOptions()
 
 	opts.AddBroker(cfg.Mqtt.Address)
