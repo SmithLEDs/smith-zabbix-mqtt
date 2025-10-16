@@ -1,10 +1,12 @@
 package main
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 	"time"
 
+	"github.com/SmithLEDs/smith-zabbix-mqtt/internal/config"
 	"github.com/SmithLEDs/smith-zabbix-mqtt/internal/lib/logger/handlers/slogpretty"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/fabiang/go-zabbix"
@@ -35,7 +37,7 @@ func isSocket(path string) bool {
 }
 
 // Функция заполняет структуру запроса для триггеров
-func makeTriggerParam() zabbix.TriggerGetParams {
+func makeTriggerParam(cfg *config.Config) zabbix.TriggerGetParams {
 	triggerParam := zabbix.TriggerGetParams{
 		SelectHosts: []string{"host"},
 	}
@@ -84,13 +86,13 @@ func setupPrettySlog() *slog.Logger {
 	return slog.New(handler)
 }
 
-type Timespan time.Duration
-
-func (t Timespan) Format(format string) string {
-	return time.Unix(0, 0).UTC().Add(time.Duration(t)).Format(format)
-}
-
 func uptime(startTime time.Time) string {
-	t := time.Since(startTime)
-	return Timespan(t).Format("15:04:05")
+
+	durationSec := uint64(time.Since(startTime).Seconds())
+	d := durationSec / 86400
+	h := (durationSec - d*86400) / 3600
+	m := (durationSec - d*86400 - h*3600) / 60
+	sec := durationSec - d*86400 - h*3600 - m*60
+
+	return fmt.Sprintf("%dд. %02d:%02d:%02d\n", d, h, m, sec)
 }
