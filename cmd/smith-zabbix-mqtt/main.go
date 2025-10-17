@@ -37,6 +37,11 @@ func init() {
 
 func main() {
 
+	if len(os.Args) > 1 && os.Args[1] == "version" {
+		fmt.Println(version)
+		os.Exit(0)
+	}
+
 	debug := flag.Bool("debug", false, "Enable debugging")
 	configPath := flag.String("configFile", DEFAULT_CONFIG_PATH, "Config path")
 
@@ -83,7 +88,6 @@ func main() {
 	}
 
 	client := mqtt.NewClient(setupMQTT(cfg, triggerStruct.reconnect))
-	triggerStruct.setClientMQTT(client)
 
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
 		log.Error(
@@ -94,6 +98,8 @@ func main() {
 	}
 
 	defer client.Disconnect(250)
+
+	triggerStruct.setClientMQTT(client)
 
 	// Создаем основной тикер для чтения триггеров
 	ticker := time.NewTicker(cfg.UpdateInterval)
