@@ -15,25 +15,30 @@
 ## 1. Принцип работы
 
 1. Сервис подключается к серверу Zabbix по API, используя протокол JSON-RPC 2.0.
-    - В коде используется библиотека [`fabiang/go-zabbix v1.1.0`](https://github.com/fabiang/go-zabbix)
-    - Используется метод `trigger.get` [(Описание метода)](https://www.zabbix.com/documentation/current/en/manual/api/reference/trigger/get)
-    - Авторизация происходит по токену [(Инструкция получения токена в WEB интерфейсе)](https://www.zabbix.com/documentation/current/en/manual/web_interface/frontend_sections/users/api_tokens)
+    * В коде используется библиотека [`fabiang/go-zabbix v1.1.0`](https://github.com/fabiang/go-zabbix)
+    * Используется метод `trigger.get` [(Описание метода)](https://www.zabbix.com/documentation/current/en/manual/api/reference/trigger/get)
+    * Авторизация происходит по токену [(Инструкция получения токена в WEB интерфейсе)](https://www.zabbix.com/documentation/current/en/manual/web_interface/frontend_sections/users/api_tokens)
 
 2. После получения активных триггеров идет пересылка в брокер MQTT.
-    - В коде используется библиотека [`eclipse/paho.mqtt.golang v1.5.1`](https://github.com/eclipse-paho/paho.mqtt.golang)
-    - Сервис сканирует все триггеры и в каждом анализирует, к каким узлам сети принадлежит данный триггер. Если данный узел сети присутствует в конфигурационном файле, то анализирует приоритеты и публикует самый высокий приоритет в брокер MQTT.
+    * В коде используется библиотека [`eclipse/paho.mqtt.golang v1.5.1`](https://github.com/eclipse-paho/paho.mqtt.golang)
+    * Сервис сканирует все триггеры и в каждом анализирует, к каким узлам сети принадлежит данный триггер. Если данный узел сети присутствует в конфигурационном файле, то анализирует приоритеты и публикует самый высокий приоритет в брокер MQTT.
 
 3. Файл конфигурации по умолчанию расположен в каталоге `/etc/smith-zabbix-mqtt/config.yaml`
 
-## 2. Параметры командной строки
+## 2. WirenBoard
+
+Сервис публикует топики в MQTT брокер согласно [Wiren Board MQTT Conventions](https://github.com/wirenboard/conventions.git). Это означает, что после публикации топиков в [WEB интерфейсе](https://wirenboard.com/ru/pages/wb-software/) контроллера отобразится новое "Виртуальное" устройство. С данным устройством можно работать в редакторе правил [wb-rules](https://github.com/wirenboard/wb-rules.git), как с обычным виртуальным устройством.
+
+## 3. Параметры командной строки
 
 | Параметр     | Тип      | Значение по умолчанию                | Описание                        |
 | ----------   | -------- | ------------------------------------ | ------------------------------- |
+| `version`    | `arg`    |                                      | Версия приложения               |
 | `--debug`    | `bool`   | `false`                              | Включение отладочных сообщений  |
 | `configFile` | `string` | `/etc/smith-zabbix-mqtt/config.yaml` | Расположение файла конфигурации |
 
 
-## 3. Пример конфигурационного файла
+## 4. Пример конфигурационного файла
 
 ```yaml
 env: local
