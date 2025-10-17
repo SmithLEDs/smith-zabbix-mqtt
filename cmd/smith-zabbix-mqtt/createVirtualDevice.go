@@ -92,6 +92,7 @@ func publicMetaData(client mqtt.Client, cfg *config.Config) {
 		}
 	}
 
+	// Мапа для перечислений (enum) для контрола
 	e := map[string]lang{
 		"2": {
 			Rus: "Норма",
@@ -107,6 +108,7 @@ func publicMetaData(client mqtt.Client, cfg *config.Config) {
 		},
 	}
 
+	// Перебираем все хосты и создаем meta-топики контролов для них
 	for _, host := range cfg.Hosts {
 		hostNoSpace := strings.ReplaceAll(host, " ", "_")
 		topicMeta := fmt.Sprintf("/devices/%s/controls/%s/meta", cfg.VirtualDevice.Name, hostNoSpace)
