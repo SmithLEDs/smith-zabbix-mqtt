@@ -13,7 +13,7 @@ const (
 	QOS = 1
 )
 
-func setupMQTT(cfg *config.Config) *mqtt.ClientOptions {
+func setupMQTT(cfg *config.Config, resendSeverity func()) *mqtt.ClientOptions {
 	opts := mqtt.NewClientOptions()
 
 	opts.AddBroker(cfg.Mqtt.Address)
@@ -48,6 +48,9 @@ func setupMQTT(cfg *config.Config) *mqtt.ClientOptions {
 
 	opts.OnConnect = func(c mqtt.Client) {
 		log.Info("MQTT connection established")
+		// Создание виртуального устройства в WirenBoard
+		publicMetaData(c, cfg)
+		resendSeverity()
 	}
 
 	opts.OnReconnecting = func(mqtt.Client, *mqtt.ClientOptions) {

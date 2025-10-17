@@ -81,7 +81,9 @@ func main() {
 		log.Info("broker URL is default and mosquitto socket detected, trying to connect via it")
 		cfg.Mqtt.Address = "unix://" + MOSQUITTO_SOCK_FILE
 	}
-	client := mqtt.NewClient(setupMQTT(cfg))
+
+	client := mqtt.NewClient(setupMQTT(cfg, triggerStruct.reconnect))
+	triggerStruct.setClientMQTT(client)
 
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
 		log.Error(
@@ -90,11 +92,8 @@ func main() {
 		)
 		os.Exit(1)
 	}
-	defer client.Disconnect(250)
 
-	// Создание виртуального устройства в WirenBoard
-	order := publicMainDevice(client, cfg.VirtualDevice)
-	publicControlsDevice(client, cfg, order)
+	defer client.Disconnect(250)
 
 	// Создаем основной тикер для чтения триггеров
 	ticker := time.NewTicker(cfg.UpdateInterval)
@@ -172,8 +171,7 @@ func main() {
 				log.Debug(s)
 			}
 
-			triggerStruct.publicSeverity(client)
-
+			triggerStruct.publicSeverity()
 		}
 	}()
 

@@ -20,6 +20,12 @@ type trigger struct {
 type triggers struct {
 	m               map[string]trigger // Мапа для хостов
 	convertSeverity map[int]string     // Мапа для конвертации приоритетов
+	client          *mqtt.Client
+	firstPublic     bool
+}
+
+func (t *triggers) setClientMQTT(client mqtt.Client) {
+	t.client = &client
 }
 
 // Создаем структуру для хранения триггеров
@@ -77,7 +83,7 @@ func (t *triggers) writeSeverity(host string, severity int) {
 	}
 }
 
-func (t *triggers) publicSeverity(client mqtt.Client) {
+func (t *triggers) publicSeverity() {
 	for host, trigger := range t.m {
 		if trigger.topic == "" {
 			continue
@@ -90,7 +96,7 @@ func (t *triggers) publicSeverity(client mqtt.Client) {
 				trigger.severity = -1
 				trigger.lastSeverity = -1
 				t.m[host] = trigger
-				pub(client, trigger.topic, t.convertPriority(trigger.severity))
+				pub(*t.client, trigger.topic, t.convertPriority(trigger.severity))
 			}
 			continue
 		}
@@ -99,11 +105,25 @@ func (t *triggers) publicSeverity(client mqtt.Client) {
 			continue
 		}
 
-		pub(client, trigger.topic, t.convertPriority(trigger.severity))
+		pub(*t.client, trigger.topic, t.convertPriority(trigger.severity))
 
 		trigger.lastSeverity = trigger.severity
 
 		t.m[host] = trigger
+	}
+
+	if !t.firstPublic {
+		t.firstPublic = true
+	}
+}
+
+// Отправить на все хосты текущее состояние приоритетов.
+func (t *triggers) reconnect() {
+	if !t.firstPublic {
+		return
+	}
+	for _, trigger := range t.m {
+		pub(*t.client, trigger.topic, t.convertPriority(trigger.severity))
 	}
 }
 
