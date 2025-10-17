@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/SmithLEDs/smith-zabbix-mqtt/internal/config"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
@@ -12,7 +13,7 @@ const (
 	QOS = 1
 )
 
-func setupMQTT() *mqtt.ClientOptions {
+func setupMQTT(cfg *config.Config, resendSeverity func()) *mqtt.ClientOptions {
 	opts := mqtt.NewClientOptions()
 
 	opts.AddBroker(cfg.Mqtt.Address)
@@ -47,6 +48,9 @@ func setupMQTT() *mqtt.ClientOptions {
 
 	opts.OnConnect = func(c mqtt.Client) {
 		log.Info("MQTT connection established")
+		// Создание виртуального устройства в WirenBoard
+		publicMetaData(c, cfg)
+		resendSeverity()
 	}
 
 	opts.OnReconnecting = func(mqtt.Client, *mqtt.ClientOptions) {

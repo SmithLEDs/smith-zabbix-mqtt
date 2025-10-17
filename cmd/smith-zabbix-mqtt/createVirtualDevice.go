@@ -35,10 +35,10 @@ type lang struct {
 }
 
 // Публикаем meta данные для виртуального устройства
-func publicMainDevice(client mqtt.Client, cfg config.VirtualDevice) int {
+func publicMetaData(client mqtt.Client, cfg *config.Config) {
 
 	// Публикуем общие сведения о виртуальном устройстве
-	mainTopic := fmt.Sprintf("/devices/%s/meta", cfg.Name)
+	mainTopic := fmt.Sprintf("/devices/%s/meta", cfg.VirtualDevice.Name)
 	mainMessage := mainDeviceMQTT{
 		Driver:  driver,
 		Version: version,
@@ -55,8 +55,8 @@ func publicMainDevice(client mqtt.Client, cfg config.VirtualDevice) int {
 	order := 1
 
 	// Создаем meta топик для uptime
-	if cfg.Uptime {
-		topicUptime = fmt.Sprintf("/devices/%s/controls/uptime", cfg.Name)
+	if cfg.VirtualDevice.Uptime {
+		topicUptime = fmt.Sprintf("/devices/%s/controls/uptime", cfg.VirtualDevice.Name)
 		message := controlMQTT{
 			Value:    0,
 			Type:     "text",
@@ -74,8 +74,8 @@ func publicMainDevice(client mqtt.Client, cfg config.VirtualDevice) int {
 	}
 
 	// Создаем meta топик для totalTriggers
-	if cfg.TotalTriggers {
-		topicTotalTriggers = fmt.Sprintf("/devices/%s/controls/totalTriggers", cfg.Name)
+	if cfg.VirtualDevice.TotalTriggers {
+		topicTotalTriggers = fmt.Sprintf("/devices/%s/controls/totalTriggers", cfg.VirtualDevice.Name)
 		message := controlMQTT{
 			Value:    0,
 			Type:     "value",
@@ -92,11 +92,7 @@ func publicMainDevice(client mqtt.Client, cfg config.VirtualDevice) int {
 		}
 	}
 
-	return order
-}
-
-// Публикуем meta данные хостов
-func publicControlsDevice(client mqtt.Client, cfg *config.Config, order int) {
+	// Мапа для перечислений (enum) для контрола
 	e := map[string]lang{
 		"2": {
 			Rus: "Норма",
@@ -111,6 +107,8 @@ func publicControlsDevice(client mqtt.Client, cfg *config.Config, order int) {
 			Eng: "Alarm",
 		},
 	}
+
+	// Перебираем все хосты и создаем meta-топики контролов для них
 	for _, host := range cfg.Hosts {
 		hostNoSpace := strings.ReplaceAll(host, " ", "_")
 		topicMeta := fmt.Sprintf("/devices/%s/controls/%s/meta", cfg.VirtualDevice.Name, hostNoSpace)
@@ -130,4 +128,5 @@ func publicControlsDevice(client mqtt.Client, cfg *config.Config, order int) {
 			order++
 		}
 	}
+
 }
