@@ -20,7 +20,7 @@
     - Авторизация происходит по токену [(Инструкция получения токена в WEB интерфейсе)](https://www.zabbix.com/documentation/current/en/manual/web_interface/frontend_sections/users/api_tokens)
 
 2. После получения активных триггеров идет пересылка в брокер MQTT.
-    - В коде используется библиотека [`eclipse/paho.mqtt.golang v1.5.0`](https://github.com/eclipse-paho/paho.mqtt.golang)
+    - В коде используется библиотека [`eclipse/paho.mqtt.golang v1.5.1`](https://github.com/eclipse-paho/paho.mqtt.golang)
     - Сервис сканирует все триггеры и в каждом анализирует, к каким узлам сети принадлежит данный триггер. Если данный узел сети присутствует в конфигурационном файле, то анализирует приоритеты и публикует самый высокий приоритет в брокер MQTT.
 
 3. Файл конфигурации по умолчанию расположен в каталоге `/etc/smith-zabbix-mqtt/config.yaml`
