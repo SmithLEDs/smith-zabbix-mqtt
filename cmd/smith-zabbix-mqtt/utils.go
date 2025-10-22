@@ -37,13 +37,14 @@ func isSocket(path string) bool {
 }
 
 // Функция заполняет структуру запроса для триггеров
-func makeTriggerParam(cfg *config.Config) zabbix.TriggerGetParams {
-	triggerParam := zabbix.TriggerGetParams{
+func makeTriggerParam(cfg *config.Config) *zabbix.TriggerGetParams {
+	triggerParam := &zabbix.TriggerGetParams{
 		SelectHosts: []string{"host"},
 	}
-	filter := make(map[string]any)
-	filter["value"] = 1
-	triggerParam.Filter = filter
+	triggerParam.Filter = map[string]any{
+		"value":  1, // Только активные триггеры
+		"status": 0, // И только НЕ деактивированные
+	}
 	triggerParam.SortField = []string{"priority"}
 	triggerParam.SortOrder = "DESC"
 	triggerParam.OutputFields = []string{"triggerid", "priority"}

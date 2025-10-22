@@ -124,12 +124,7 @@ func main() {
 
 	go func() {
 		for range ticker.C {
-			// Подключение MQTT не активно
-			if !client.IsConnectionOpen() {
-				continue
-			}
-
-			triggers, err := nSession.GetTriggers(trigParam)
+			triggers, err := nSession.GetTriggers(*trigParam)
 			if err != nil && !errors.Is(err, zabbix.ErrNotFound) {
 				log.Error(
 					"Zabbix - ошибка получения триггеров",
@@ -138,16 +133,6 @@ func main() {
 				continue
 			}
 			// Тут все хорошо, триггеры получены
-
-			if *debug {
-				log.Debug(fmt.Sprintf("Активных триггеров: %d", len(triggers)))
-			}
-
-			if client.IsConnectionOpen() {
-				if cfg.VirtualDevice.TotalTriggers {
-					pub(client, topicTotalTriggers, fmt.Sprint(len(triggers)))
-				}
-			}
 
 			triggerStruct.activeOFF()
 
@@ -161,8 +146,16 @@ func main() {
 				}
 			}
 
+			if client.IsConnectionOpen() {
+				triggerStruct.publicSeverity()
+				if cfg.VirtualDevice.TotalTriggers {
+					pub(client, topicTotalTriggers, fmt.Sprint(len(triggers)))
+				}
+			}
+
 			if *debug {
 				var s string
+				s += fmt.Sprintf("Активных триггеров: %d\n", len(triggers))
 				if cfg.Zabbix.Group != "" {
 					s += "selectGroup: " + cfg.Zabbix.Group + "\n"
 				}
@@ -176,8 +169,6 @@ func main() {
 				}
 				log.Debug(s)
 			}
-
-			triggerStruct.publicSeverity()
 		}
 	}()
 
