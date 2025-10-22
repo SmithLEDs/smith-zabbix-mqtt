@@ -19,7 +19,7 @@ import (
 const (
 	envLocal = "local"
 	envDev   = "dev"
-	version  = "0.0.4"
+	version  = "0.0.5"
 	driver   = "smith-zabbix-mqtt"
 	rus      = "Zabbix2MQTT"
 	eng      = "Zabbix2MQTT"
