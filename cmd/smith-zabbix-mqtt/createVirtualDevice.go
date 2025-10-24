@@ -115,7 +115,7 @@ func publicMetaData(client mqtt.Client, cfg *config.Config) {
 		message := controlMQTT{
 			Value:    2,
 			Type:     "value",
-			ReadOnly: false,
+			ReadOnly: true,
 			Order:    order,
 			Title: lang{
 				Eng: host,

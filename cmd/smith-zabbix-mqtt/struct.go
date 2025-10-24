@@ -2,11 +2,18 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 	"maps"
 	"strings"
+	"sync"
 
 	"github.com/SmithLEDs/smith-zabbix-mqtt/internal/config"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
+)
+
+const (
+	SEVERITY_NORMAL    = 2
+	SEVERITY_UNDEFINED = -1
 )
 
 type trigger struct {
@@ -17,119 +24,163 @@ type trigger struct {
 	active       bool   // Активность триггера (Активно, если API Zabbix выдал триггер на данный хост)
 }
 
-type triggers struct {
-	m               map[string]trigger // Мапа для хостов
-	convertSeverity map[int]string     // Мапа для конвертации приоритетов
-	client          *mqtt.Client
-	firstPublic     bool
+type TriggerManager struct {
+	mu              sync.RWMutex
+	triggers        map[string]*trigger // Мапа для хостов
+	convertSeverity map[int]string      // Мапа для конвертации приоритетов
+	client          mqtt.Client         // Клиент MQTT для публикации топиков
+	cfg             *config.Config      // Указатель на структуру конфигурации
 }
 
-func (t *triggers) setClientMQTT(client mqtt.Client) {
-	t.client = &client
+// NewTriggerManager создает новый менеджер триггеров
+func NewTriggerManager(cfg *config.Config) *TriggerManager {
+	tm := &TriggerManager{
+		triggers:        make(map[string]*trigger),
+		convertSeverity: map[int]string{0: "2", 1: "2", 2: "3", 3: "3", 4: "4", 5: "4"},
+		cfg:             cfg,
+	}
+
+	tm.initializeFromConfig()
+	return tm
 }
 
-// Создаем структуру для хранения триггеров
-func makeTriggerStruct() *triggers {
-	var cfg triggers
-	cfg.m = make(map[string]trigger)
-	cfg.convertSeverity = map[int]string{0: "2", 1: "2", 2: "3", 3: "3", 4: "4", 5: "4"}
-	return &cfg
+// Инициализация из конфигурации
+func (tm *TriggerManager) initializeFromConfig() {
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
 
-}
-
-// Читаем из конфигурации все хосты и топики для публикации
-func (t *triggers) readConfig(conf *config.Config) {
-	for _, host := range conf.Hosts {
+	for _, host := range tm.cfg.Hosts {
 		hostNoSpace := strings.ReplaceAll(host, " ", "_")
-		topic := fmt.Sprintf("/devices/%s/controls/%s", conf.VirtualDevice.Name, hostNoSpace)
-		val := trigger{
+		topic := fmt.Sprintf("/devices/%s/controls/%s", tm.cfg.VirtualDevice.Name, hostNoSpace)
+
+		tm.triggers[host] = &trigger{
 			topic:        topic,
-			severity:     0,
-			lastSeverity: 0,
+			severity:     SEVERITY_UNDEFINED,
+			lastSeverity: SEVERITY_UNDEFINED,
 			active:       false,
 		}
-		t.m[host] = val
 	}
+
 	// Если в конфигурации есть переобределения приоритета
-	if len(conf.Severity) > 0 {
-		maps.Copy(t.convertSeverity, conf.Severity)
+	if len(tm.cfg.Severity) > 0 {
+		maps.Copy(tm.convertSeverity, tm.cfg.Severity)
 	}
 }
 
-func (t *triggers) activeOFF() {
-	for host, trigger := range t.m {
+// Функция конвертации приоритетов
+func (tm *TriggerManager) convert(severity int) string {
+	if val, ok := tm.convertSeverity[severity]; ok {
+		return val
+	}
+	return fmt.Sprint(SEVERITY_NORMAL)
+}
+
+// Задаем MQTT клиента
+func (tm *TriggerManager) SetClient(client mqtt.Client) {
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+
+	tm.client = client
+}
+
+// При успешном подключении к MQTT брокеру отправляем все приоритеты
+func (tm *TriggerManager) OnConnect(client mqtt.Client) {
+	for _, trigger := range tm.triggers {
+		tm.publishSeverity(trigger.topic, trigger.severity)
+	}
+}
+
+// Внутренний метод для публикации в MQTT брокер с конвертацией приоритета
+func (tm *TriggerManager) publishSeverity(topic string, severity int) {
+	if tm.client == nil {
+		return
+	}
+
+	token := tm.client.Publish(topic, QOS, true, tm.convert(severity))
+
+	// Не забываем про асинхронность
+	go func() {
+		<-token.Done()
+		if token.Error() != nil {
+			log.Error(
+				"Error publish MQTT",
+				slog.String("error", token.Error().Error()),
+			)
+		}
+	}()
+}
+
+// Деактивируем все триггеры перед новым опросом
+func (tm *TriggerManager) ActiveOFF() {
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+
+	for _, trigger := range tm.triggers {
 		trigger.active = false
 		trigger.mSeverity = trigger.mSeverity[:0]
-		t.m[host] = trigger
 	}
 }
 
 // Записываем приоритет в хост
-func (t *triggers) writeSeverity(host string, severity int) {
-	if val, ok := t.m[host]; ok {
-		val.mSeverity = append(val.mSeverity, severity)
+func (tm *TriggerManager) AppendSeverity(host string, severity int) {
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
 
-		maxSeverity := -1
-		for _, v := range val.mSeverity {
-			if v > maxSeverity {
-				maxSeverity = v
-			}
-		}
-
-		val.severity = maxSeverity
-
-		val.active = true
-		t.m[host] = val
+	if trigger, ok := tm.triggers[host]; ok {
+		trigger.mSeverity = append(trigger.mSeverity, severity)
+		trigger.active = true
 	}
 }
 
-func (t *triggers) publicSeverity() {
-	for host, trigger := range t.m {
+// Вычисляем максимальный приоритет в каждом хосте
+func (tm *TriggerManager) CalculateMaxSeverities() {
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+
+	for _, trigger := range tm.triggers {
+		if !trigger.active || len(trigger.mSeverity) == 0 {
+			continue
+		}
+
+		maxSeverity := -1
+		for _, value := range trigger.mSeverity {
+			if value > maxSeverity {
+				maxSeverity = value
+			}
+		}
+
+		trigger.severity = maxSeverity
+	}
+}
+
+func (tm *TriggerManager) PublicAllSeverity() {
+	tm.mu.Lock()
+
+	publications := make(map[string]int)
+
+	for _, trigger := range tm.triggers {
 		if trigger.topic == "" {
 			continue
 		}
 
-		//fmt.Printf("| %s \t(%d : %d)\n", trigger.topic, trigger.severity, trigger.lastSeverity)
-
 		if !trigger.active {
-			if trigger.severity != -1 {
-				trigger.severity = -1
-				trigger.lastSeverity = -1
-				t.m[host] = trigger
-				pub(*t.client, trigger.topic, t.convertPriority(trigger.severity))
+			if trigger.severity != SEVERITY_UNDEFINED {
+				trigger.severity = SEVERITY_UNDEFINED
+				trigger.lastSeverity = SEVERITY_UNDEFINED
+				publications[trigger.topic] = SEVERITY_UNDEFINED
 			}
 			continue
 		}
 
-		if trigger.severity == trigger.lastSeverity {
-			continue
+		if trigger.severity != trigger.lastSeverity {
+			publications[trigger.topic] = trigger.severity
+			trigger.lastSeverity = trigger.severity
 		}
 
-		pub(*t.client, trigger.topic, t.convertPriority(trigger.severity))
-
-		trigger.lastSeverity = trigger.severity
-
-		t.m[host] = trigger
 	}
 
-	if !t.firstPublic {
-		t.firstPublic = true
+	tm.mu.Unlock()
+	for topic, severity := range publications {
+		tm.publishSeverity(topic, severity)
 	}
-}
-
-// Отправить на все хосты текущее состояние приоритетов.
-func (t *triggers) reconnect() {
-	if !t.firstPublic {
-		return
-	}
-	for _, trigger := range t.m {
-		pub(*t.client, trigger.topic, t.convertPriority(trigger.severity))
-	}
-}
-
-func (t *triggers) convertPriority(priority int) string {
-	if val, ok := t.convertSeverity[priority]; ok {
-		return val
-	}
-	return "2"
 }

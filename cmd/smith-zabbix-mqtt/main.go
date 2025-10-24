@@ -35,6 +35,43 @@ func init() {
 	log = setupLogger(envLocal)
 }
 
+type ConnectionManager struct {
+	tm *TriggerManager
+}
+
+func (cm *ConnectionManager) GetOnConnectHandler() mqtt.OnConnectHandler {
+	return func(client mqtt.Client) {
+		log.Info("MQTT connection established")
+
+		// Вызываем все нужные обработчики
+		cm.tm.OnConnect(client)
+
+	}
+}
+
+// Добавляем метод валидации конфигурации
+func validateConfig(cfg *config.Config) error {
+	if cfg.Zabbix.Address == "" {
+		return errors.New("адрес Zabbix обязателен")
+	}
+	if cfg.Zabbix.Token == "" {
+		return errors.New("токен Zabbix обязателен")
+	}
+	if cfg.Mqtt.Address == "" {
+		return errors.New("адрес MQTT обязателен")
+	}
+	if cfg.UpdateInterval <= 0 {
+		return errors.New("интервал обновления должен быть положительным")
+	}
+	if cfg.VirtualDevice.Name == "" {
+		return errors.New("имя виртуального устройства обязательно")
+	}
+	if len(cfg.Hosts) == 0 {
+		return errors.New("не найдено ни одного хоста для слежения")
+	}
+	return nil
+}
+
 func main() {
 
 	if len(os.Args) > 1 && os.Args[1] == "version" {
@@ -50,9 +87,20 @@ func main() {
 	// Читаем конфигурацию
 	cfg := config.MustLoad(*configPath)
 
+	//Проверка на валидность
+	if err := validateConfig(cfg); err != nil {
+		log.Error(
+			"Ошибка конфигурации",
+			slog.String("error", err.Error()),
+		)
+		os.Exit(1)
+	}
+
 	// Создаем и заполняем переменную для работы с триггерами
-	triggerStruct := makeTriggerStruct()
-	triggerStruct.readConfig(cfg)
+	triggerManager := NewTriggerManager(cfg)
+
+	connectionManager := &ConnectionManager{}
+	connectionManager.tm = triggerManager
 
 	log.Info(
 		"Starting smith-zabbix-mqtt",
@@ -87,7 +135,10 @@ func main() {
 		cfg.Mqtt.Address = "unix://" + MOSQUITTO_SOCK_FILE
 	}
 
-	client := mqtt.NewClient(setupMQTT(cfg, triggerStruct.reconnect))
+	opts := setupMQTT(cfg)
+	opts.SetOnConnectHandler(connectionManager.GetOnConnectHandler())
+
+	client := mqtt.NewClient(opts)
 
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
 		log.Error(
@@ -99,7 +150,8 @@ func main() {
 
 	defer client.Disconnect(250)
 
-	triggerStruct.setClientMQTT(client)
+	triggerManager.SetClient(client)
+	publicMetaData(client, cfg)
 
 	// Создаем основной тикер для чтения триггеров
 	ticker := time.NewTicker(cfg.UpdateInterval)
@@ -134,20 +186,23 @@ func main() {
 			}
 			// Тут все хорошо, триггеры получены
 
-			triggerStruct.activeOFF()
+			triggerManager.ActiveOFF()
 
 			// Перебираем все активные триггеры
 			if len(triggers) != 0 {
 				for _, vTrig := range triggers {
 					// Перебираем все хосты в триггере
 					for _, vHost := range vTrig.Hosts {
-						triggerStruct.writeSeverity(vHost.Hostname, vTrig.Severity)
+						triggerManager.AppendSeverity(vHost.Hostname, vTrig.Severity)
 					}
 				}
 			}
 
+			// ВЫЧИСЛЯЕМ максимумы после сбора ВСЕХ триггеров
+			triggerManager.CalculateMaxSeverities()
+
 			if client.IsConnectionOpen() {
-				triggerStruct.publicSeverity()
+				triggerManager.PublicAllSeverity()
 				if cfg.VirtualDevice.TotalTriggers {
 					pub(client, topicTotalTriggers, fmt.Sprint(len(triggers)))
 				}
