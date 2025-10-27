@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log/slog"
 	"time"
 
@@ -9,48 +8,29 @@ import (
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
-const (
-	QOS = 1
-)
-
-func setupMQTT(cfg *config.Config) *mqtt.ClientOptions {
-	opts := mqtt.NewClientOptions()
-
-	opts.AddBroker(cfg.Mqtt.Address)
-	opts.SetClientID(cfg.Mqtt.ClientID)
+func setupMQTT(cfg *config.Config, log *slog.Logger) *mqtt.ClientOptions {
+	opts := mqtt.NewClientOptions().
+		AddBroker(cfg.Mqtt.Address).
+		SetClientID(cfg.Mqtt.ClientID).
+		SetOrderMatters(false).         // Allow out of order messages (use this option unless in order delivery is essential)
+		SetConnectTimeout(time.Second). // Minimal delays on connect
+		SetWriteTimeout(time.Second).   // Minimal delays on writes
+		SetKeepAlive(10 * time.Second). // Keepalive every 10 seconds so we quickly detect network outages
+		SetPingTimeout(time.Second).    // local broker so response should be quick
+		SetConnectRetry(false).         // Automate connection management (will keep trying to connect and will reconnect if network drops)
+		SetAutoReconnect(true)
 
 	if cfg.Mqtt.Auth {
-		opts.SetUsername(cfg.Mqtt.Login)
-		opts.SetPassword(cfg.Mqtt.Password)
-	}
-
-	opts.SetOrderMatters(false)       // Allow out of order messages (use this option unless in order delivery is essential)
-	opts.ConnectTimeout = time.Second // Minimal delays on connect
-	opts.WriteTimeout = time.Second   // Minimal delays on writes
-	opts.KeepAlive = 10               // Keepalive every 10 seconds so we quickly detect network outages
-	opts.PingTimeout = time.Second    // local broker so response should be quick
-
-	// Automate connection management (will keep trying to connect and will reconnect if network drops)
-	opts.ConnectRetry = false
-	opts.AutoReconnect = true
-
-	opts.DefaultPublishHandler = func(_ mqtt.Client, msg mqtt.Message) {
-		fmt.Printf("UNEXPECTED MESSAGE: %s\n", msg)
+		opts.SetUsername(cfg.Mqtt.Login).SetPassword(cfg.Mqtt.Password)
 	}
 
 	// Log events
 	opts.OnConnectionLost = func(cl mqtt.Client, err error) {
 		log.Error(
-			"MQTT",
-			slog.String("connection lost", err.Error()),
+			"MQTT connection lost",
+			slog.String("error", err.Error()),
 		)
 	}
-
-	// opts.OnConnect = func(c mqtt.Client) {
-	// 	//log.Info("MQTT connection established")
-	// 	// Создание виртуального устройства в WirenBoard
-
-	// }
 
 	opts.OnReconnecting = func(mqtt.Client, *mqtt.ClientOptions) {
 		log.Warn("MQTT attempting to reconnect")
