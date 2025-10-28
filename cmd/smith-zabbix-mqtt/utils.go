@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -8,23 +9,17 @@ import (
 
 	"github.com/SmithLEDs/smith-zabbix-mqtt/internal/config"
 	"github.com/SmithLEDs/smith-zabbix-mqtt/internal/lib/logger/handlers/slogpretty"
-	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/fabiang/go-zabbix"
 )
 
-// Публикация в MQTT
-func pub(client mqtt.Client, topic string, msg string) {
-
-	t := client.Publish(topic, QOS, true, msg)
-	go func() {
-		<-t.Done()
-		if t.Error() != nil {
-			log.Error(
-				"Error publish MQTT",
-				slog.String("error", t.Error().Error()),
-			)
-		}
-	}()
+// Общая функция для сериализации в JSON
+func marshalToJSON(v interface{}) string {
+	jsonData, err := json.Marshal(v)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "JSON marshaling failed: %v\n", err)
+		return ""
+	}
+	return string(jsonData)
 }
 
 // Проверяем, установлен или нет брокер Mosquitto на этом же сервере
