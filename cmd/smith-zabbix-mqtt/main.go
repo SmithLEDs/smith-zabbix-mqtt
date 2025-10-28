@@ -70,9 +70,12 @@ func main() {
 	}()
 
 	if err := app.Run(ctx); err != nil {
-		log.Error("application run failed", "error", err)
+		log.Error(
+			"application finished with error",
+			slog.String("error", err.Error()),
+		)
 		os.Exit(1)
 	}
 
-	log.Info("application stopped gracefully")
+	log.Info("application stopped")
 }
