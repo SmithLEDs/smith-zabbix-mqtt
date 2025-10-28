@@ -137,7 +137,9 @@ func (app *Application) Run(ctx context.Context) error {
 	go app.runTriggerPolling(ctx, errCh)
 
 	if app.cfg.VirtualDevice.Uptime {
-		go app.runUptimeUpdates(ctx, errCh)
+		go func() {
+			app.runUptimeUpdates(ctx)
+		}()
 	}
 
 	select {
@@ -169,7 +171,7 @@ func (app *Application) runTriggerPolling(ctx context.Context, errCh chan error)
 }
 
 // runUptimeUpdates запускает обновления uptime
-func (app *Application) runUptimeUpdates(ctx context.Context, errCh chan error) {
+func (app *Application) runUptimeUpdates(ctx context.Context) {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
