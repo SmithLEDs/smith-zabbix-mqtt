@@ -32,16 +32,18 @@ func NewApplication(cfg *config.Config, logger *slog.Logger, debug bool) *Applic
 
 // Инициализируем компоненты приложения
 func (app *Application) Initialize() error {
+	const op = "app.Initialize" // Имя текущей функции для логов и ошибок
+
 	if err := app.validateConfig(); err != nil {
-		return fmt.Errorf("config validation failed: %w", err)
+		return fmt.Errorf("%s: config validation failed: %w", op, err)
 	}
 
 	if err := app.connectToZabbix(); err != nil {
-		return fmt.Errorf("zabbix connection failed: %w", err)
+		return fmt.Errorf("%s: zabbix connection failed: %w", op, err)
 	}
 
 	if err := app.connectToMQTT(); err != nil {
-		return fmt.Errorf("mqtt connection failed: %w", err)
+		return fmt.Errorf("%s: mqtt connection failed: %w", op, err)
 	}
 
 	return nil
@@ -56,29 +58,33 @@ func (app *Application) Close() {
 
 // Проверка конфигурации
 func (app *Application) validateConfig() error {
+	const op = "app.validateConfig" // Имя текущей функции для логов и ошибок
+
 	if app.cfg.Zabbix.Address == "" {
-		return errors.New("zabbix address is required")
+		return errors.New(op + ":zabbix address is required")
 	}
 	if app.cfg.Zabbix.Token == "" {
-		return errors.New("zabbix token is required")
+		return errors.New(op + ":zabbix token is required")
 	}
 	if app.cfg.Mqtt.Address == "" {
-		return errors.New("mqtt address is required")
+		return errors.New(op + ":mqtt address is required")
 	}
 	if app.cfg.UpdateInterval <= 0 {
-		return errors.New("update interval must be positive")
+		return errors.New(op + ":update interval must be positive")
 	}
 	if app.cfg.VirtualDevice.Name == "" {
-		return errors.New("virtual device name is required")
+		return errors.New(op + ":virtual device name is required")
 	}
 	if len(app.cfg.Hosts) == 0 {
-		return errors.New("no hosts configured for monitoring")
+		return errors.New(op + ":no hosts configured for monitoring")
 	}
 	return nil
 }
 
 // Подключаемся к Zabbix
 func (app *Application) connectToZabbix() error {
+	const op = "app.connectToZabbix" // Имя текущей функции для логов и ошибок
+
 	session := &zabbix.Session{
 		URL:   app.cfg.Zabbix.Address,
 		Token: app.cfg.Zabbix.Token,
@@ -86,7 +92,7 @@ func (app *Application) connectToZabbix() error {
 
 	version, err := session.GetVersion()
 	if err != nil {
-		return err
+		return fmt.Errorf("%s: %w", op, err)
 	}
 
 	app.zabbix = session
@@ -98,6 +104,8 @@ func (app *Application) connectToZabbix() error {
 
 // Подключаемся к MQTT брокеру
 func (app *Application) connectToMQTT() error {
+	const op = "app.connectToMQTT" // Имя текущей функции для логов и ошибок
+
 	brokerURL := app.cfg.Mqtt.Address
 	if brokerURL == DEFAULT_BROKER_URL && isSocket(MOSQUITTO_SOCK_FILE) {
 		app.logger.Info("using mosquitto socket")
@@ -115,7 +123,7 @@ func (app *Application) connectToMQTT() error {
 
 	app.mqtt = mqtt.NewClient(opts)
 	if token := app.mqtt.Connect(); token.Wait() && token.Error() != nil {
-		return token.Error()
+		return fmt.Errorf("%s: %w", op, token.Error())
 	}
 
 	app.tm.SetClient(app.mqtt)
@@ -124,6 +132,8 @@ func (app *Application) connectToMQTT() error {
 
 // Run запускает основную логику приложения
 func (app *Application) Run(ctx context.Context) error {
+	const op = "app.Run" // Имя текущей функции для логов и ошибок
+
 	app.logger.Info(
 		"Starting smith-zabbix-mqtt",
 		slog.String("version", Version),
@@ -146,7 +156,7 @@ func (app *Application) Run(ctx context.Context) error {
 	case <-ctx.Done():
 		return nil
 	case err := <-errCh:
-		return err
+		return fmt.Errorf("%s: %w", op, err)
 	}
 }
 
