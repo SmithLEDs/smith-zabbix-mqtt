@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 	"log/slog"
-	"maps"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -209,7 +209,14 @@ func (tm *TriggerManager) initializeDeviceMeta() {
 // applyCustomSeverityMapping применяет пользовательские настройки severity
 func (tm *TriggerManager) applyCustomSeverityMapping() {
 	if len(tm.cfg.Severity) > 0 {
-		maps.Copy(tm.severityMap, tm.cfg.Severity)
+		for s, newS := range tm.cfg.Severity {
+			i, err := strconv.Atoi(s)
+			if err != nil {
+				tm.log.Error("severity Atoi", Err(err))
+				continue
+			}
+			tm.severityMap[i] = newS
+		}
 	}
 }
 

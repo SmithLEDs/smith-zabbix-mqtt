@@ -9,13 +9,13 @@ import (
 )
 
 type Config struct {
-	Env            string         `yaml:"env" env-default:"local"`
-	UpdateInterval time.Duration  `yaml:"update_interval" env-default:"1s"`
-	Mqtt           MQTT           `yaml:"mqtt"`
-	Zabbix         Zabbix         `yaml:"zabbix"`
-	VirtualDevice  VirtualDevice  `yaml:"mqtt_virtual_device"`
-	Severity       map[int]string `yaml:"severity,omitempty"`
-	Hosts          []string       `yaml:"hosts,omitempty"`
+	Env            string            `yaml:"env" env-default:"local"`
+	UpdateInterval time.Duration     `yaml:"update_interval" env-default:"1s"`
+	Mqtt           MQTT              `yaml:"mqtt"`
+	Zabbix         Zabbix            `yaml:"zabbix"`
+	VirtualDevice  VirtualDevice     `yaml:"mqtt_virtual_device"`
+	Severity       map[string]string `yaml:"severity,omitempty"`
+	Hosts          []string          `yaml:"hosts,omitempty"`
 }
 
 type Zabbix struct {
@@ -24,10 +24,6 @@ type Zabbix struct {
 	//Password string `yaml:"password" env-default:"zabbix"`
 	Token string `yaml:"token" env-default:""`
 	Group string `yaml:"group" env-default:""`
-}
-
-type TopicsPublic struct {
-	Servers map[string]string `yaml:"servers" env-default:""`
 }
 
 type MQTT struct {
