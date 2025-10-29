@@ -122,11 +122,15 @@ func (app *Application) connectToMQTT() error {
 	opts.SetOnConnectHandler(connectionManager.GetOnConnectHandler())
 
 	app.mqtt = mqtt.NewClient(opts)
+
+	// Убедитесь, что TriggerManager содержит ссылку на клиент mqtt перед выполнением функции Connect()
+	// поскольку библиотека может вызвать обработчик OnConnect во время выполнения функции Connect().
+	app.tm.SetClient(app.mqtt)
+
 	if token := app.mqtt.Connect(); token.Wait() && token.Error() != nil {
 		return fmt.Errorf("%s: %w", op, token.Error())
 	}
 
-	app.tm.SetClient(app.mqtt)
 	return nil
 }
 
