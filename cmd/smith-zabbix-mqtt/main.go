@@ -10,6 +10,7 @@ import (
 	"syscall"
 
 	"github.com/SmithLEDs/smith-zabbix-mqtt/internal/config"
+	"gopkg.in/yaml.v3"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
@@ -38,11 +39,23 @@ func main() {
 
 	debug := flag.Bool("debug", false, "enable debugging")
 	configPath := flag.String("configFile", DEFAULT_CONFIG_PATH, "config path")
+	printConfig := flag.Bool("print-config", false, "print current configuration and exit")
 
 	flag.Parse()
 
 	// Читаем конфигурацию
 	cfg := config.MustLoad(*configPath)
+
+	if *printConfig {
+		cfg.Mqtt.Password = "***"
+		cfg.Zabbix.Token = "***"
+		if data, err := yaml.Marshal(&cfg); err != nil {
+			fmt.Fprint(os.Stderr, err)
+		} else {
+			fmt.Print(string(data))
+		}
+		os.Exit(0)
+	}
 
 	log := setupLogger(cfg.Env)
 
