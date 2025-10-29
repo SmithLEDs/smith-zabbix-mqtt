@@ -33,15 +33,14 @@ type TopicsPublic struct {
 type MQTT struct {
 	Address  string `yaml:"address" env-default:"tcp://localhost:1883"`
 	ClientID string `yaml:"client_id" env-default:"smith-zabbix-mqtt"`
-	Auth     bool   `yaml:"authorization" env-default:"false"`
 	Login    string `yaml:"login" env-default:""`
 	Password string `yaml:"password" env-default:""`
 }
 
 type VirtualDevice struct {
 	Name          string `yaml:"name" env-default:"statusServers"`
-	TotalTriggers bool   `yaml:"total_triggers" env-default:"true"`
-	Uptime        bool   `yaml:"uptime" env-default:"true"`
+	TotalTriggers bool   `yaml:"total_triggers"`
+	Uptime        bool   `yaml:"uptime"`
 }
 
 // Загружаем конфигурацию из файла
@@ -69,6 +68,8 @@ func MustLoad(configPath string) *Config {
 	if err != nil {
 		log.Fatalf("error reading config file: '%s'", err)
 	}
+	// f, _ := yaml.Marshal(&cfg)
+	// os.WriteFile("config1.yaml", f, 0644)
 
 	return &cfg
 }

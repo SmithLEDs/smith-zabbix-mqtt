@@ -7,9 +7,6 @@ update_interval: 2s
 mqtt:
     address: tcp://localhost:1883
     client_id: smith-zabbix-mqtt
-
-    # Если false, то логин и пароль игнорируются
-    authorization: false
     login: 
     password: 
 
