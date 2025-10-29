@@ -122,7 +122,7 @@ func (tm *TriggerManager) initializeAdditionalControls() int {
 
 	if tm.cfg.VirtualDevice.Uptime {
 		tm.controls[CTRL_UPTIME] = &Control{
-			topic: fmt.Sprintf("/devices/%s/controls/uptime", deviceName),
+			topic: fmt.Sprintf("/devices/%s/controls/"+CTRL_UPTIME, deviceName),
 			meta: ControlMeta{
 				Value:    "0",
 				Type:     ControlTypeText,
@@ -139,7 +139,7 @@ func (tm *TriggerManager) initializeAdditionalControls() int {
 
 	if tm.cfg.VirtualDevice.TotalTriggers {
 		tm.controls[CTRL_TOTAL_TRIGGERS] = &Control{
-			topic: fmt.Sprintf("/devices/%s/controls/totalTriggers", deviceName),
+			topic: fmt.Sprintf("/devices/%s/controls/"+CTRL_TOTAL_TRIGGERS, deviceName),
 			meta: ControlMeta{
 				Value:    0,
 				Type:     ControlTypeValue,
