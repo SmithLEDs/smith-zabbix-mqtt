@@ -7,6 +7,8 @@ update_interval: 2s
 mqtt:
     address: tcp://localhost:1883
     client_id: smith-zabbix-mqtt
+
+    # Если login/ password пустые — авторизация не используется
     login: 
     password: 
 
