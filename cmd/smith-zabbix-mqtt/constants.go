@@ -13,6 +13,10 @@ const (
 	DEFAULT_BROKER_URL  = "tcp://localhost:1883"
 
 	SEVERITY_UNDEFINED = -1
+)
 
-	QOS = 1
+// MQTT
+const (
+	QOS         = 1
+	META_SUFFIX = "/meta"
 )

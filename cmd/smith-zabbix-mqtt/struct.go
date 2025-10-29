@@ -72,12 +72,20 @@ type Control struct {
 	topic string
 }
 
-func (cm *ControlMeta) getMeta() string {
-	return marshalToJSON(cm)
+func (cm *ControlMeta) getMeta() (string, error) {
+	s, err := marshalToJSON(cm)
+	if err != nil {
+		return "", err
+	}
+	return s, nil
 }
 
-func (md *MainDeviceMeta) getMeta() string {
-	return marshalToJSON(md)
+func (md *MainDeviceMeta) getMeta() (string, error) {
+	s, err := marshalToJSON(md)
+	if err != nil {
+		return "", err
+	}
+	return s, nil
 }
 
 // NewTriggerManager создает новый менеджер триггеров
@@ -266,22 +274,47 @@ func (tm *TriggerManager) OnConnect(client mqtt.Client) {
 	}
 
 	// Публикуем метаданные главного устройства
-	tm.publish(tm.meta.topic, tm.meta.getMeta())
-
-	// Публикуем метаданные и значения для дополнительных контролов
-	if tm.cfg.VirtualDevice.Uptime {
-		tm.publish(tm.uptime.topic+"/meta", tm.uptime.meta.getMeta())
-		tm.publish(tm.uptime.topic, "0") // Начальное значение uptime
+	if tm.meta.topic != "" {
+		if m, err := tm.meta.getMeta(); err != nil {
+			tm.log.Error(
+				"get meta main device",
+				Err(err),
+			)
+		} else {
+			tm.publish(tm.meta.topic, m)
+		}
 	}
 
-	if tm.cfg.VirtualDevice.TotalTriggers {
-		tm.publish(tm.totalTriggers.topic+"/meta", tm.totalTriggers.meta.getMeta())
-		tm.publish(tm.totalTriggers.topic, "0") // Начальное значение totalTriggers
+	// Публикуем метаданные для контрола uptime
+	if tm.cfg.VirtualDevice.Uptime && tm.uptime.topic != "" {
+		if m, err := tm.uptime.meta.getMeta(); err != nil {
+			tm.log.Error("get meta uptime", Err(err))
+		} else {
+			tm.publish(tm.uptime.topic+META_SUFFIX, m)
+		}
 	}
 
-	// Публикуем метаданные и значения для всех триггеров
+	// Публикуем метаданные для контрола totalTriggers
+	if tm.cfg.VirtualDevice.TotalTriggers && tm.totalTriggers.topic != "" {
+		if m, err := tm.totalTriggers.meta.getMeta(); err != nil {
+			tm.log.Error("get meta total triggers", Err(err))
+		} else {
+			tm.publish(tm.totalTriggers.topic+META_SUFFIX, m)
+		}
+	}
+
+	// Публикуем метаданные и текущие значения для всех триггеров
 	for host, trigger := range tm.triggers {
-		tm.publish(trigger.topic+"/meta", trigger.meta.getMeta())
+		if trigger.topic == "" {
+			continue
+		}
+		if m, err := trigger.meta.getMeta(); err != nil {
+			tm.log.Error("get meta trigger", slog.String("host", host), Err(err))
+		} else {
+			tm.publish(trigger.topic+META_SUFFIX, m)
+		}
+
+		// Значение публикуем только если топик не пустой
 		tm.publish(trigger.topic, tm.convertSeverity(trigger.currentSeverity))
 
 		if tm.debug {

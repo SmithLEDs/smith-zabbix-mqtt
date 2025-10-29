@@ -13,13 +13,12 @@ import (
 )
 
 // Общая функция для сериализации в JSON
-func marshalToJSON(v interface{}) string {
+func marshalToJSON(v any) (string, error) {
 	jsonData, err := json.Marshal(v)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "JSON marshaling failed: %v\n", err)
-		return ""
+		return "", err
 	}
-	return string(jsonData)
+	return string(jsonData), nil
 }
 
 // Проверяем, установлен или нет брокер Mosquitto на этом же сервере
@@ -80,6 +79,10 @@ func setupPrettySlog() *slog.Logger {
 	handler := opts.NewPrettyHandler(os.Stdout)
 
 	return slog.New(handler)
+}
+
+func Err(err error) slog.Attr {
+	return slog.Any("error", err)
 }
 
 // Возвращаем время работы в строковом представлении
