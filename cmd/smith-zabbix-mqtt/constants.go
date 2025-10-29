@@ -20,3 +20,9 @@ const (
 	QOS         = 1
 	META_SUFFIX = "/meta"
 )
+
+// Controls виртуальных устройств
+const (
+	CTRL_UPTIME         = "uptime"         // Имя для контрола uptime
+	CTRL_TOTAL_TRIGGERS = "total_triggers" // Имя для контрола total_triggers
+)

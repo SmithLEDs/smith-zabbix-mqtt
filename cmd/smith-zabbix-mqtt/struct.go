@@ -54,16 +54,17 @@ type HostTrigger struct {
 }
 
 type TriggerManager struct {
-	mu            sync.RWMutex
-	triggers      map[string]*HostTrigger // Мапа для хостов
-	severityMap   map[int]string          // Мапа для конвертации приоритетов
-	client        mqtt.Client             // Клиент MQTT для публикации топиков
-	meta          MainDeviceMeta
-	uptime        Control
-	totalTriggers Control
-	cfg           *config.Config // Указатель на структуру конфигурации
-	debug         bool
-	log           *slog.Logger
+	mu          sync.RWMutex
+	triggers    map[string]*HostTrigger // Мапа для хостов
+	severityMap map[int]string          // Мапа для конвертации приоритетов
+	client      mqtt.Client             // Клиент MQTT для публикации топиков
+	meta        MainDeviceMeta
+	//uptime        Control
+	//totalTriggers Control
+	cfg      *config.Config // Указатель на структуру конфигурации
+	debug    bool
+	log      *slog.Logger
+	controls map[string]*Control
 }
 
 // Структура для сторонних контролов
@@ -72,26 +73,11 @@ type Control struct {
 	topic string
 }
 
-func (cm *ControlMeta) getMeta() (string, error) {
-	s, err := marshalToJSON(cm)
-	if err != nil {
-		return "", err
-	}
-	return s, nil
-}
-
-func (md *MainDeviceMeta) getMeta() (string, error) {
-	s, err := marshalToJSON(md)
-	if err != nil {
-		return "", err
-	}
-	return s, nil
-}
-
 // NewTriggerManager создает новый менеджер триггеров
 func NewTriggerManager(cfg *config.Config, logger *slog.Logger, debug bool) *TriggerManager {
 	tm := &TriggerManager{
 		triggers:    make(map[string]*HostTrigger),
+		controls:    make(map[string]*Control),
 		severityMap: createDefaultSeverityMap(),
 		cfg:         cfg,
 		log:         logger,
@@ -135,7 +121,7 @@ func (tm *TriggerManager) initializeAdditionalControls() int {
 	deviceName := tm.cfg.VirtualDevice.Name
 
 	if tm.cfg.VirtualDevice.Uptime {
-		tm.uptime = Control{
+		tm.controls[CTRL_UPTIME] = &Control{
 			topic: fmt.Sprintf("/devices/%s/controls/uptime", deviceName),
 			meta: ControlMeta{
 				Value:    "0",
@@ -152,7 +138,7 @@ func (tm *TriggerManager) initializeAdditionalControls() int {
 	}
 
 	if tm.cfg.VirtualDevice.TotalTriggers {
-		tm.totalTriggers = Control{
+		tm.controls[CTRL_TOTAL_TRIGGERS] = &Control{
 			topic: fmt.Sprintf("/devices/%s/controls/totalTriggers", deviceName),
 			meta: ControlMeta{
 				Value:    0,
@@ -238,15 +224,15 @@ func (tm *TriggerManager) createEnumMap() map[string]Lang {
 
 // Обновление значения uptime
 func (tm *TriggerManager) UpdateUptime(uptime string) {
-	if tm.uptime.topic != "" {
-		tm.publish(tm.uptime.topic, uptime)
+	if val, ok := tm.controls[CTRL_UPTIME]; ok && val.topic != "" {
+		tm.publish(val.topic, uptime)
 	}
 }
 
 // Обновление количества триггеров
 func (tm *TriggerManager) UpdateTotalTriggers(count int) {
-	if tm.cfg.VirtualDevice.TotalTriggers && tm.totalTriggers.topic != "" {
-		tm.publish(tm.totalTriggers.topic, fmt.Sprint(count))
+	if val, ok := tm.controls[CTRL_TOTAL_TRIGGERS]; ok && val.topic != "" {
+		tm.publish(val.topic, fmt.Sprint(count))
 	}
 }
 
@@ -269,37 +255,28 @@ func (tm *TriggerManager) SetClient(client mqtt.Client) {
 
 // При успешном подключении к MQTT брокеру отправляем все метаданные и значения
 func (tm *TriggerManager) OnConnect(client mqtt.Client) {
+	tm.mu.RLock()
+	defer tm.mu.RUnlock()
+
 	if tm.debug {
 		tm.log.Debug("Publishing all metadata on MQTT connect")
 	}
 
 	// Публикуем метаданные главного устройства
 	if tm.meta.topic != "" {
-		if m, err := tm.meta.getMeta(); err != nil {
-			tm.log.Error(
-				"get meta main device",
-				Err(err),
-			)
+		if m, err := marshalToJSON(tm.meta); err != nil {
+			tm.log.Error("get meta main device", Err(err))
 		} else {
 			tm.publish(tm.meta.topic, m)
 		}
 	}
 
-	// Публикуем метаданные для контрола uptime
-	if tm.cfg.VirtualDevice.Uptime && tm.uptime.topic != "" {
-		if m, err := tm.uptime.meta.getMeta(); err != nil {
-			tm.log.Error("get meta uptime", Err(err))
+	// Публикуем meta-данные дополнительных контролов
+	for control, data := range tm.controls {
+		if m, err := marshalToJSON(data.meta); err != nil {
+			tm.log.Error("get meta", slog.String("control", control), Err(err))
 		} else {
-			tm.publish(tm.uptime.topic+META_SUFFIX, m)
-		}
-	}
-
-	// Публикуем метаданные для контрола totalTriggers
-	if tm.cfg.VirtualDevice.TotalTriggers && tm.totalTriggers.topic != "" {
-		if m, err := tm.totalTriggers.meta.getMeta(); err != nil {
-			tm.log.Error("get meta total triggers", Err(err))
-		} else {
-			tm.publish(tm.totalTriggers.topic+META_SUFFIX, m)
+			tm.publish(data.topic+META_SUFFIX, m)
 		}
 	}
 
@@ -308,7 +285,7 @@ func (tm *TriggerManager) OnConnect(client mqtt.Client) {
 		if trigger.topic == "" {
 			continue
 		}
-		if m, err := trigger.meta.getMeta(); err != nil {
+		if m, err := marshalToJSON(trigger.meta); err != nil {
 			tm.log.Error("get meta trigger", slog.String("host", host), Err(err))
 		} else {
 			tm.publish(trigger.topic+META_SUFFIX, m)
