@@ -82,13 +82,16 @@ func setupPrettySlog() *slog.Logger {
 	return slog.New(handler)
 }
 
+// Возвращаем время работы в строковом представлении
 func uptime(startTime time.Time) string {
-
 	durationSec := uint64(time.Since(startTime).Seconds())
-	d := durationSec / 86400
-	h := (durationSec - d*86400) / 3600
-	m := (durationSec - d*86400 - h*3600) / 60
-	sec := durationSec - d*86400 - h*3600 - m*60
 
-	return fmt.Sprintf("%dд. %02d:%02d:%02d\n", d, h, m, sec)
+	d := durationSec / 86400
+	r := (durationSec - d*86400)
+	h := r / 3600
+	r -= h * 3600
+	m := r / 60
+	sec := r - m*60
+
+	return fmt.Sprintf("%dд. %02d:%02d:%02d", d, h, m, sec)
 }
