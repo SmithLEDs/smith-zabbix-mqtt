@@ -114,44 +114,37 @@ func (tm *TriggerManager) initializeFromConfig() {
 	}
 }
 
-// initializeAdditionalControls инициализирует дополнительные контролы
+// initializeAdditionalControls инициализирует дополнительные контролы на основе
+// предопределенных описаний из controls.go
 func (tm *TriggerManager) initializeAdditionalControls() int {
 	order := 1
-
 	deviceName := tm.cfg.VirtualDevice.Name
 
-	if tm.cfg.VirtualDevice.Uptime {
-		tm.controls[CTRL_UPTIME] = &Control{
-			topic: fmt.Sprintf("/devices/%s/controls/"+CTRL_UPTIME, deviceName),
-			meta: ControlMeta{
-				Value:    "0",
-				Type:     ControlTypeText,
-				ReadOnly: true,
-				Order:    order,
-				Title: Lang{
-					Rus: "Время работы",
-					Eng: "Uptime",
-				},
-			},
+	for _, ctrl := range defaultControls {
+		if !ctrl.IsEnabled(tm.cfg) {
+			continue
 		}
-		order++
-	}
 
-	if tm.cfg.VirtualDevice.TotalTriggers {
-		tm.controls[CTRL_TOTAL_TRIGGERS] = &Control{
-			topic: fmt.Sprintf("/devices/%s/controls/"+CTRL_TOTAL_TRIGGERS, deviceName),
+		tm.controls[ctrl.CtrlID] = &Control{
+			topic: fmt.Sprintf("/devices/%s/controls/%s", deviceName, ctrl.CtrlID),
 			meta: ControlMeta{
-				Value:    0,
-				Type:     ControlTypeValue,
-				ReadOnly: true,
+				Value:    ctrl.DefaultVal,
+				Type:     ctrl.Type,
+				ReadOnly: ctrl.ReadOnly,
 				Order:    order,
 				Title: Lang{
-					Rus: "Активных триггеров",
-					Eng: "Total triggers",
+					Rus: ctrl.TitleRus,
+					Eng: ctrl.TitleEng,
 				},
 			},
 		}
 		order++
+
+		if tm.debug {
+			tm.log.Debug("initialized control",
+				slog.String("id", ctrl.CtrlID),
+				slog.String("type", string(ctrl.Type)))
+		}
 	}
 
 	return order
