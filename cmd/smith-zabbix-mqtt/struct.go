@@ -308,6 +308,15 @@ func (tm *TriggerManager) publish(topic string, payload string) {
 		return
 	}
 
+	// If connection is not open, skip publish
+	if !tm.client.IsConnectionOpen() {
+		if tm.debug {
+			tm.log.Debug("mqtt connection not open, skipping publish",
+				slog.String("topic", topic))
+		}
+		return
+	}
+
 	token := tm.client.Publish(topic, QOS, true, payload)
 
 	// Не забываем про асинхронность

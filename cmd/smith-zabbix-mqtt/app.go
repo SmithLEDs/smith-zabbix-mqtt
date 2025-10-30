@@ -234,10 +234,8 @@ func (app *Application) pollTriggers(params *zabbix.TriggerGetParams) error {
 		}
 	}
 
-	if app.mqtt != nil && app.mqtt.IsConnectionOpen() {
-		app.tm.PublishAllSeverities()
-		app.tm.UpdateTotalTriggers(len(triggers))
-	}
+	app.tm.PublishAllSeverities()
+	app.tm.UpdateTotalTriggers(len(triggers))
 
 	if app.debug {
 		app.logTriggers(triggers)
