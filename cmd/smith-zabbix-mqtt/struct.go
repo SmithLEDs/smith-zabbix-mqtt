@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 	"log/slog"
-	"maps"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -21,27 +21,27 @@ type ControlType string
 
 // Структура meta-данных для контролов виртуального устройства
 type ControlMeta struct {
-	Title    Lang            `json:"title"`
-	ReadOnly bool            `json:"readonly"`
-	Type     ControlType     `json:"type"`
-	Value    any             `json:"value"`
-	Order    int             `json:"order,omitempty"`
-	Enum     map[string]Lang `json:"enum,omitempty"`
+	Title    config.Lang            `json:"title"`
+	ReadOnly bool                   `json:"readonly"`
+	Type     ControlType            `json:"type"`
+	Value    any                    `json:"value"`
+	Order    int                    `json:"order,omitempty"`
+	Enum     map[string]config.Lang `json:"enum,omitempty"`
 }
 
 // Структура meta-данных главного виртуального устройства
 type MainDeviceMeta struct {
-	Title   Lang   `json:"title"`
-	Driver  string `json:"driver"`
-	Version string `json:"version"`
-	topic   string `json:"-"`
+	Title   config.Lang `json:"title"`
+	Driver  string      `json:"driver"`
+	Version string      `json:"version"`
+	topic   string      `json:"-"`
 }
 
 // Структура для языков
-type Lang struct {
-	Rus string `json:"ru"`
-	Eng string `json:"en"`
-}
+// type Lang struct {
+// 	Rus string `json:"ru"`
+// 	Eng string `json:"en"`
+// }
 
 // Состояние хоста
 type HostTrigger struct {
@@ -54,16 +54,17 @@ type HostTrigger struct {
 }
 
 type TriggerManager struct {
-	mu            sync.RWMutex
-	triggers      map[string]*HostTrigger // Мапа для хостов
-	severityMap   map[int]string          // Мапа для конвертации приоритетов
-	client        mqtt.Client             // Клиент MQTT для публикации топиков
-	meta          MainDeviceMeta
-	uptime        Control
-	totalTriggers Control
-	cfg           *config.Config // Указатель на структуру конфигурации
-	debug         bool
-	log           *slog.Logger
+	mu          sync.RWMutex
+	triggers    map[string]*HostTrigger // Мапа для хостов
+	severityMap map[int]string          // Мапа для конвертации приоритетов
+	client      mqtt.Client             // Клиент MQTT для публикации топиков
+	meta        MainDeviceMeta
+	//uptime        Control
+	//totalTriggers Control
+	cfg      *config.Config // Указатель на структуру конфигурации
+	debug    bool
+	log      *slog.Logger
+	controls map[string]*Control
 }
 
 // Структура для сторонних контролов
@@ -72,19 +73,12 @@ type Control struct {
 	topic string
 }
 
-func (cm *ControlMeta) getMeta() string {
-	return marshalToJSON(cm)
-}
-
-func (md *MainDeviceMeta) getMeta() string {
-	return marshalToJSON(md)
-}
-
 // NewTriggerManager создает новый менеджер триггеров
 func NewTriggerManager(cfg *config.Config, logger *slog.Logger, debug bool) *TriggerManager {
 	tm := &TriggerManager{
 		triggers:    make(map[string]*HostTrigger),
-		severityMap: createDefaultSeverityMap(),
+		controls:    make(map[string]*Control),
+		severityMap: make(map[int]string),
 		cfg:         cfg,
 		log:         logger,
 		debug:       debug,
@@ -95,13 +89,6 @@ func NewTriggerManager(cfg *config.Config, logger *slog.Logger, debug bool) *Tri
 	return tm
 }
 
-// createDefaultSeverityMap создает маппинг severity по умолчанию
-func createDefaultSeverityMap() map[int]string {
-	return map[int]string{
-		0: "0", 1: "1", 2: "2", 3: "3", 4: "4", 5: "5",
-	}
-}
-
 // Инициализация из конфигурации
 func (tm *TriggerManager) initializeFromConfig() {
 	tm.mu.Lock()
@@ -110,7 +97,7 @@ func (tm *TriggerManager) initializeFromConfig() {
 	order := tm.initializeAdditionalControls()
 	tm.initializeHosts(order)
 	tm.initializeDeviceMeta()
-	tm.applyCustomSeverityMapping()
+	tm.applySeverityMapping()
 
 	if tm.debug {
 		tm.log.Debug("TriggerManager initialized",
@@ -120,44 +107,37 @@ func (tm *TriggerManager) initializeFromConfig() {
 	}
 }
 
-// initializeAdditionalControls инициализирует дополнительные контролы
+// initializeAdditionalControls инициализирует дополнительные контролы на основе
+// предопределенных описаний из controls.go
 func (tm *TriggerManager) initializeAdditionalControls() int {
 	order := 1
-
 	deviceName := tm.cfg.VirtualDevice.Name
 
-	if tm.cfg.VirtualDevice.Uptime {
-		tm.uptime = Control{
-			topic: fmt.Sprintf("/devices/%s/controls/uptime", deviceName),
-			meta: ControlMeta{
-				Value:    "0",
-				Type:     ControlTypeText,
-				ReadOnly: true,
-				Order:    order,
-				Title: Lang{
-					Rus: "Время работы",
-					Eng: "Uptime",
-				},
-			},
+	for _, ctrl := range defaultControls {
+		if !ctrl.IsEnabled(tm.cfg) {
+			continue
 		}
-		order++
-	}
 
-	if tm.cfg.VirtualDevice.TotalTriggers {
-		tm.totalTriggers = Control{
-			topic: fmt.Sprintf("/devices/%s/controls/totalTriggers", deviceName),
+		tm.controls[ctrl.CtrlID] = &Control{
+			topic: fmt.Sprintf("/devices/%s/controls/%s", deviceName, ctrl.CtrlID),
 			meta: ControlMeta{
-				Value:    0,
-				Type:     ControlTypeValue,
-				ReadOnly: true,
+				Value:    ctrl.DefaultVal,
+				Type:     ctrl.Type,
+				ReadOnly: ctrl.ReadOnly,
 				Order:    order,
-				Title: Lang{
-					Rus: "Активных триггеров",
-					Eng: "Total triggers",
+				Title: config.Lang{
+					Rus: ctrl.TitleRus,
+					Eng: ctrl.TitleEng,
 				},
 			},
 		}
 		order++
+
+		if tm.debug {
+			tm.log.Debug("initialized control",
+				slog.String("id", ctrl.CtrlID),
+				slog.String("type", string(ctrl.Type)))
+		}
 	}
 
 	return order
@@ -165,7 +145,6 @@ func (tm *TriggerManager) initializeAdditionalControls() int {
 
 // initializeHosts инициализирует хосты для мониторинга
 func (tm *TriggerManager) initializeHosts(startOrder int) {
-	enumMap := tm.createEnumMap()
 	order := startOrder
 
 	for _, host := range tm.cfg.Hosts {
@@ -182,11 +161,11 @@ func (tm *TriggerManager) initializeHosts(startOrder int) {
 				Type:     ControlTypeValue,
 				ReadOnly: false,
 				Order:    order,
-				Title: Lang{
+				Title: config.Lang{
 					Eng: host,
 					Rus: host,
 				},
-				Enum: enumMap,
+				Enum: tm.cfg.DescriptionSeverity,
 			},
 		}
 		order++
@@ -205,40 +184,37 @@ func (tm *TriggerManager) initializeDeviceMeta() {
 		topic:   fmt.Sprintf("/devices/%s/meta", tm.cfg.VirtualDevice.Name),
 		Driver:  Driver,
 		Version: Version,
-		Title: Lang{
+		Title: config.Lang{
 			Rus: AppNameRus,
 			Eng: AppNameEng,
 		},
 	}
 }
 
-// applyCustomSeverityMapping применяет пользовательские настройки severity
-func (tm *TriggerManager) applyCustomSeverityMapping() {
-	if len(tm.cfg.Severity) > 0 {
-		maps.Copy(tm.severityMap, tm.cfg.Severity)
-	}
-}
-
-// Создание карты enum для контролов
-func (tm *TriggerManager) createEnumMap() map[string]Lang {
-	return map[string]Lang{
-		"2": {Rus: "Норма", Eng: "Normal"},
-		"3": {Rus: "Внимание", Eng: "Warning"},
-		"4": {Rus: "Авария", Eng: "Alarm"},
+// applySeverityMapping применяет переопределение приоритета из конфигурации
+// и конвертирует string в int
+func (tm *TriggerManager) applySeverityMapping() {
+	for s, newS := range tm.cfg.Severity {
+		i, err := strconv.Atoi(s)
+		if err != nil {
+			tm.log.Error("severity Atoi", Err(err))
+			continue
+		}
+		tm.severityMap[i] = newS
 	}
 }
 
 // Обновление значения uptime
 func (tm *TriggerManager) UpdateUptime(uptime string) {
-	if tm.uptime.topic != "" {
-		tm.publish(tm.uptime.topic, uptime)
+	if val, ok := tm.controls[CTRL_UPTIME]; ok && val.topic != "" {
+		tm.publish(val.topic, uptime)
 	}
 }
 
 // Обновление количества триггеров
 func (tm *TriggerManager) UpdateTotalTriggers(count int) {
-	if tm.cfg.VirtualDevice.TotalTriggers && tm.totalTriggers.topic != "" {
-		tm.publish(tm.totalTriggers.topic, fmt.Sprint(count))
+	if val, ok := tm.controls[CTRL_TOTAL_TRIGGERS]; ok && val.topic != "" {
+		tm.publish(val.topic, fmt.Sprint(count))
 	}
 }
 
@@ -261,27 +237,43 @@ func (tm *TriggerManager) SetClient(client mqtt.Client) {
 
 // При успешном подключении к MQTT брокеру отправляем все метаданные и значения
 func (tm *TriggerManager) OnConnect(client mqtt.Client) {
+	tm.mu.RLock()
+	defer tm.mu.RUnlock()
+
 	if tm.debug {
 		tm.log.Debug("Publishing all metadata on MQTT connect")
 	}
 
 	// Публикуем метаданные главного устройства
-	tm.publish(tm.meta.topic, tm.meta.getMeta())
-
-	// Публикуем метаданные и значения для дополнительных контролов
-	if tm.cfg.VirtualDevice.Uptime {
-		tm.publish(tm.uptime.topic+"/meta", tm.uptime.meta.getMeta())
-		tm.publish(tm.uptime.topic, "0") // Начальное значение uptime
+	if tm.meta.topic != "" {
+		if m, err := marshalToJSON(tm.meta); err != nil {
+			tm.log.Error("get meta main device", Err(err))
+		} else {
+			tm.publish(tm.meta.topic, m)
+		}
 	}
 
-	if tm.cfg.VirtualDevice.TotalTriggers {
-		tm.publish(tm.totalTriggers.topic+"/meta", tm.totalTriggers.meta.getMeta())
-		tm.publish(tm.totalTriggers.topic, "0") // Начальное значение totalTriggers
+	// Публикуем meta-данные дополнительных контролов
+	for control, data := range tm.controls {
+		if m, err := marshalToJSON(data.meta); err != nil {
+			tm.log.Error("get meta", slog.String("control", control), Err(err))
+		} else {
+			tm.publish(data.topic+META_SUFFIX, m)
+		}
 	}
 
-	// Публикуем метаданные и значения для всех триггеров
+	// Публикуем метаданные и текущие значения для всех триггеров
 	for host, trigger := range tm.triggers {
-		tm.publish(trigger.topic+"/meta", trigger.meta.getMeta())
+		if trigger.topic == "" {
+			continue
+		}
+		if m, err := marshalToJSON(trigger.meta); err != nil {
+			tm.log.Error("get meta trigger", slog.String("host", host), Err(err))
+		} else {
+			tm.publish(trigger.topic+META_SUFFIX, m)
+		}
+
+		// Значение публикуем только если топик не пустой
 		tm.publish(trigger.topic, tm.convertSeverity(trigger.currentSeverity))
 
 		if tm.debug {
@@ -295,6 +287,15 @@ func (tm *TriggerManager) OnConnect(client mqtt.Client) {
 // Внутренний метод для публикации в MQTT брокер
 func (tm *TriggerManager) publish(topic string, payload string) {
 	if tm.client == nil {
+		return
+	}
+
+	// If connection is not open, skip publish
+	if !tm.client.IsConnectionOpen() {
+		if tm.debug {
+			tm.log.Debug("mqtt connection not open, skipping publish",
+				slog.String("topic", topic))
+		}
 		return
 	}
 

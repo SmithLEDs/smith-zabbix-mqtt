@@ -17,12 +17,10 @@ func setupMQTT(cfg *config.Config, log *slog.Logger) *mqtt.ClientOptions {
 		SetWriteTimeout(time.Second).   // Minimal delays on writes
 		SetKeepAlive(10 * time.Second). // Keepalive every 10 seconds so we quickly detect network outages
 		SetPingTimeout(time.Second).    // local broker so response should be quick
-		SetConnectRetry(true).          // Automate connection management (will keep trying to connect and will reconnect if network drops)
-		SetAutoReconnect(true)
-
-	if cfg.Mqtt.Auth {
-		opts.SetUsername(cfg.Mqtt.Login).SetPassword(cfg.Mqtt.Password)
-	}
+		SetConnectRetry(false).         // Automate connection management (will keep trying to connect and will reconnect if network drops)
+		SetAutoReconnect(true).
+		SetUsername(cfg.Mqtt.Login).
+		SetPassword(cfg.Mqtt.Password)
 
 	// Log events
 	opts.OnConnectionLost = func(cl mqtt.Client, err error) {
