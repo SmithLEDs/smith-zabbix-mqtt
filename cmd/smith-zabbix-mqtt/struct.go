@@ -78,7 +78,7 @@ func NewTriggerManager(cfg *config.Config, logger *slog.Logger, debug bool) *Tri
 	tm := &TriggerManager{
 		triggers:    make(map[string]*HostTrigger),
 		controls:    make(map[string]*Control),
-		severityMap: createDefaultSeverityMap(),
+		severityMap: make(map[int]string),
 		cfg:         cfg,
 		log:         logger,
 		debug:       debug,
@@ -89,13 +89,6 @@ func NewTriggerManager(cfg *config.Config, logger *slog.Logger, debug bool) *Tri
 	return tm
 }
 
-// createDefaultSeverityMap создает маппинг severity по умолчанию
-func createDefaultSeverityMap() map[int]string {
-	return map[int]string{
-		0: "0", 1: "1", 2: "2", 3: "3", 4: "4", 5: "5",
-	}
-}
-
 // Инициализация из конфигурации
 func (tm *TriggerManager) initializeFromConfig() {
 	tm.mu.Lock()
@@ -104,7 +97,7 @@ func (tm *TriggerManager) initializeFromConfig() {
 	order := tm.initializeAdditionalControls()
 	tm.initializeHosts(order)
 	tm.initializeDeviceMeta()
-	tm.applyCustomSeverityMapping()
+	tm.applySeverityMapping()
 
 	if tm.debug {
 		tm.log.Debug("TriggerManager initialized",
@@ -198,17 +191,16 @@ func (tm *TriggerManager) initializeDeviceMeta() {
 	}
 }
 
-// applyCustomSeverityMapping применяет пользовательские настройки severity
-func (tm *TriggerManager) applyCustomSeverityMapping() {
-	if len(tm.cfg.Severity) > 0 {
-		for s, newS := range tm.cfg.Severity {
-			i, err := strconv.Atoi(s)
-			if err != nil {
-				tm.log.Error("severity Atoi", Err(err))
-				continue
-			}
-			tm.severityMap[i] = newS
+// applySeverityMapping применяет переопределение приоритета из конфигурации
+// и конвертирует string в int
+func (tm *TriggerManager) applySeverityMapping() {
+	for s, newS := range tm.cfg.Severity {
+		i, err := strconv.Atoi(s)
+		if err != nil {
+			tm.log.Error("severity Atoi", Err(err))
+			continue
 		}
+		tm.severityMap[i] = newS
 	}
 }
 
