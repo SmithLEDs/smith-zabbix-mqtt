@@ -1,7 +1,7 @@
 package main
 
 const (
-	Version    = "0.0.6"
+	Version    = "0.0.7"
 	envLocal   = "local"
 	envDev     = "dev"
 	Driver     = "smith-zabbix-mqtt"
