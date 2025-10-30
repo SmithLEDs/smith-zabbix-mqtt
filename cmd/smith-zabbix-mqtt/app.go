@@ -34,10 +34,6 @@ func NewApplication(cfg *config.Config, logger *slog.Logger, debug bool) *Applic
 func (app *Application) Initialize() error {
 	const op = "app.Initialize" // Имя текущей функции для логов и ошибок
 
-	if err := app.validateConfig(); err != nil {
-		return fmt.Errorf("%s: config validation failed: %w", op, err)
-	}
-
 	if err := app.connectToZabbix(); err != nil {
 		return fmt.Errorf("%s: zabbix connection failed: %w", op, err)
 	}
@@ -54,31 +50,6 @@ func (app *Application) Close() {
 	if app.mqtt != nil {
 		app.mqtt.Disconnect(250)
 	}
-}
-
-// Проверка конфигурации
-func (app *Application) validateConfig() error {
-	const op = "app.validateConfig" // Имя текущей функции для логов и ошибок
-
-	if app.cfg.Zabbix.Address == "" {
-		return errors.New(op + ":zabbix address is required")
-	}
-	if app.cfg.Zabbix.Token == "" {
-		return errors.New(op + ":zabbix token is required")
-	}
-	if app.cfg.Mqtt.Address == "" {
-		return errors.New(op + ":mqtt address is required")
-	}
-	if app.cfg.UpdateInterval <= 0 {
-		return errors.New(op + ":update interval must be positive")
-	}
-	if app.cfg.VirtualDevice.Name == "" {
-		return errors.New(op + ":virtual device name is required")
-	}
-	if len(app.cfg.Hosts) == 0 {
-		return errors.New(op + ":no hosts configured for monitoring")
-	}
-	return nil
 }
 
 // Подключаемся к Zabbix
