@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"log"
 	"os"
 	"time"
@@ -9,13 +10,14 @@ import (
 )
 
 type Config struct {
-	Env            string            `yaml:"env" env-default:"local"`
-	UpdateInterval time.Duration     `yaml:"update_interval" env-default:"1s"`
-	Mqtt           MQTT              `yaml:"mqtt"`
-	Zabbix         Zabbix            `yaml:"zabbix"`
-	VirtualDevice  VirtualDevice     `yaml:"mqtt_virtual_device"`
-	Severity       map[string]string `yaml:"severity,omitempty"`
-	Hosts          []string          `yaml:"hosts,omitempty"`
+	Env                 string            `yaml:"env" env-default:"local"`
+	UpdateInterval      time.Duration     `yaml:"update_interval" env-default:"1s"`
+	Mqtt                MQTT              `yaml:"mqtt"`
+	Zabbix              Zabbix            `yaml:"zabbix"`
+	VirtualDevice       VirtualDevice     `yaml:"mqtt_virtual_device"`
+	Severity            map[string]string `yaml:"severity,omitempty"`
+	DescriptionSeverity map[string]Lang   `yaml:"description_severity,omitempty"`
+	Hosts               []string          `yaml:"hosts,omitempty"`
 }
 
 type Zabbix struct {
@@ -39,6 +41,11 @@ type VirtualDevice struct {
 	Uptime        bool   `yaml:"uptime"`
 }
 
+type Lang struct {
+	Rus string `yaml:"ru" json:"ru"`
+	Eng string `yaml:"en" json:"en"`
+}
+
 // Загружаем конфигурацию из файла
 // В приоритете загрузка файла конфигурации, указанного в переменной окружении
 func MustLoad(configPath string) *Config {
@@ -59,13 +66,52 @@ func MustLoad(configPath string) *Config {
 		log.Fatalf("configuration file does not exist: '%s'", path)
 	}
 
+	cfg.toDefine()
+
 	// Читаем конфигурацию
 	err = cleanenv.ReadConfig(path, &cfg)
 	if err != nil {
 		log.Fatalf("error reading config file: '%s'", err)
 	}
-	// f, _ := yaml.Marshal(&cfg)
-	// os.WriteFile("config1.yaml", f, 0644)
+
+	if err = cfg.validate(); err != nil {
+		log.Fatalf("error validate config: '%s'", err)
+	}
 
 	return &cfg
+}
+
+// Валидация конфигурации
+func (cfg *Config) validate() error {
+	const op = "Config.validate" // Имя текущей функции для логов и ошибок
+
+	if cfg.Zabbix.Address == "" {
+		return errors.New(op + ":zabbix address is required")
+	}
+	if cfg.Zabbix.Token == "" {
+		return errors.New(op + ":zabbix token is required")
+	}
+	if cfg.Mqtt.Address == "" {
+		return errors.New(op + ":mqtt address is required")
+	}
+	if cfg.UpdateInterval <= 0 {
+		return errors.New(op + ":update interval must be positive")
+	}
+	if cfg.VirtualDevice.Name == "" {
+		return errors.New(op + ":virtual device name is required")
+	}
+	if len(cfg.Hosts) == 0 {
+		return errors.New(op + ":no hosts configured for monitoring")
+	}
+	return nil
+}
+
+// Функция задает значения по умолчанию. Вызывать перед ReadConfig
+func (cfg *Config) toDefine() {
+	// Значение по умолчанию для описания приоритетов
+	cfg.DescriptionSeverity = map[string]Lang{
+		"2": {Rus: "Норма", Eng: "Normal"},
+		"3": {Rus: "Внимание", Eng: "Warning"},
+		"4": {Rus: "Авария", Eng: "Alarm"},
+	}
 }

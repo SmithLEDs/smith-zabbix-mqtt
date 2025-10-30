@@ -21,27 +21,27 @@ type ControlType string
 
 // Структура meta-данных для контролов виртуального устройства
 type ControlMeta struct {
-	Title    Lang            `json:"title"`
-	ReadOnly bool            `json:"readonly"`
-	Type     ControlType     `json:"type"`
-	Value    any             `json:"value"`
-	Order    int             `json:"order,omitempty"`
-	Enum     map[string]Lang `json:"enum,omitempty"`
+	Title    config.Lang            `json:"title"`
+	ReadOnly bool                   `json:"readonly"`
+	Type     ControlType            `json:"type"`
+	Value    any                    `json:"value"`
+	Order    int                    `json:"order,omitempty"`
+	Enum     map[string]config.Lang `json:"enum,omitempty"`
 }
 
 // Структура meta-данных главного виртуального устройства
 type MainDeviceMeta struct {
-	Title   Lang   `json:"title"`
-	Driver  string `json:"driver"`
-	Version string `json:"version"`
-	topic   string `json:"-"`
+	Title   config.Lang `json:"title"`
+	Driver  string      `json:"driver"`
+	Version string      `json:"version"`
+	topic   string      `json:"-"`
 }
 
 // Структура для языков
-type Lang struct {
-	Rus string `json:"ru"`
-	Eng string `json:"en"`
-}
+// type Lang struct {
+// 	Rus string `json:"ru"`
+// 	Eng string `json:"en"`
+// }
 
 // Состояние хоста
 type HostTrigger struct {
@@ -132,7 +132,7 @@ func (tm *TriggerManager) initializeAdditionalControls() int {
 				Type:     ctrl.Type,
 				ReadOnly: ctrl.ReadOnly,
 				Order:    order,
-				Title: Lang{
+				Title: config.Lang{
 					Rus: ctrl.TitleRus,
 					Eng: ctrl.TitleEng,
 				},
@@ -152,7 +152,6 @@ func (tm *TriggerManager) initializeAdditionalControls() int {
 
 // initializeHosts инициализирует хосты для мониторинга
 func (tm *TriggerManager) initializeHosts(startOrder int) {
-	enumMap := tm.createEnumMap()
 	order := startOrder
 
 	for _, host := range tm.cfg.Hosts {
@@ -169,11 +168,11 @@ func (tm *TriggerManager) initializeHosts(startOrder int) {
 				Type:     ControlTypeValue,
 				ReadOnly: false,
 				Order:    order,
-				Title: Lang{
+				Title: config.Lang{
 					Eng: host,
 					Rus: host,
 				},
-				Enum: enumMap,
+				Enum: tm.cfg.DescriptionSeverity,
 			},
 		}
 		order++
@@ -192,7 +191,7 @@ func (tm *TriggerManager) initializeDeviceMeta() {
 		topic:   fmt.Sprintf("/devices/%s/meta", tm.cfg.VirtualDevice.Name),
 		Driver:  Driver,
 		Version: Version,
-		Title: Lang{
+		Title: config.Lang{
 			Rus: AppNameRus,
 			Eng: AppNameEng,
 		},
@@ -210,15 +209,6 @@ func (tm *TriggerManager) applyCustomSeverityMapping() {
 			}
 			tm.severityMap[i] = newS
 		}
-	}
-}
-
-// Создание карты enum для контролов
-func (tm *TriggerManager) createEnumMap() map[string]Lang {
-	return map[string]Lang{
-		"2": {Rus: "Норма", Eng: "Normal"},
-		"3": {Rus: "Внимание", Eng: "Warning"},
-		"4": {Rus: "Авария", Eng: "Alarm"},
 	}
 }
 
