@@ -88,6 +88,18 @@ severity:
     4: 4
     5: 4
 
+# Описание для приоритетов
+description_severity:
+  "2":
+    ru: "Норма"
+    en: "Normal"
+  "3":
+    ru: "Внимание"
+    en: "Warning"
+  "4":
+    ru: "Авария"
+    en: "Alarm"
+
 # Перечисление хостов Zabbix, за которыми нужно следить (Имя узла сети)
 hosts:
     - Zabbix server # Сервер Zabbix 
